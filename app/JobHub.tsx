@@ -188,6 +188,22 @@ function normalizeLanguage(language?: string) {
   return language;
 }
 
+function normalizeStoredProgress(item?: Partial<ProblemProgress>): ProblemProgress {
+  const normalized: ProblemProgress = {
+    ...emptyProgress,
+    ...item,
+    bruteForceTimeComplexity: item?.bruteForceTimeComplexity || "",
+    bruteForceSpaceComplexity: item?.bruteForceSpaceComplexity || "",
+    optimalTimeComplexity: item?.optimalTimeComplexity || item?.complexity || "",
+    optimalSpaceComplexity: item?.optimalSpaceComplexity || "",
+    codeLanguage: item?.codeLanguage ? normalizeLanguage(item.codeLanguage) : "",
+  };
+  const hasPastAttempt = hasReviewableInput(normalized) || normalized.minutes > 0 || Boolean(normalized.lastAttempt);
+  return hasPastAttempt && normalized.status === "Not Started"
+    ? { ...normalized, status: "Attempted" }
+    : normalized;
+}
+
 function formatCoverageLabel(value: string) {
   const labels: Record<string, string> = {
     code: "Solution code",
@@ -455,7 +471,12 @@ export default function JobHub() {
       const storedProgress = localStorage.getItem(PROGRESS_KEY);
       const storedSettings = localStorage.getItem(SETTINGS_KEY);
       setApplications(storedApplications ? JSON.parse(storedApplications) : makeDemoApplications(localToday));
-      setProgress(storedProgress ? JSON.parse(storedProgress) : {});
+      if (storedProgress) {
+        const savedProgress = JSON.parse(storedProgress) as Record<string, Partial<ProblemProgress>>;
+        setProgress(Object.fromEntries(Object.entries(savedProgress).map(([id, item]) => [id, normalizeStoredProgress(item)])));
+      } else {
+        setProgress({});
+      }
       if (storedSettings) {
         const savedSettings = JSON.parse(storedSettings) as Settings;
         setSettings({ ...savedSettings, primaryLanguage: normalizeLanguage(savedSettings.primaryLanguage) });
@@ -572,15 +593,11 @@ export default function JobHub() {
 
   function openProblem(problem: InterviewProblem) {
     const saved = progress[String(problem.id)];
+    const normalized = normalizeStoredProgress(saved);
     setSelectedProblem(problem);
     setProblemDraft({
-      ...emptyProgress,
-      ...saved,
-      bruteForceTimeComplexity: saved?.bruteForceTimeComplexity || "",
-      bruteForceSpaceComplexity: saved?.bruteForceSpaceComplexity || "",
-      optimalTimeComplexity: saved?.optimalTimeComplexity || saved?.complexity || "",
-      optimalSpaceComplexity: saved?.optimalSpaceComplexity || "",
-      codeLanguage: normalizeLanguage(saved?.codeLanguage || settings.primaryLanguage),
+      ...normalized,
+      codeLanguage: normalizeLanguage(normalized.codeLanguage || settings.primaryLanguage),
     });
     setReviewError("");
   }
