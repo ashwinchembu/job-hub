@@ -8,6 +8,7 @@ A local-first workspace for job applications, follow-ups, and a personalized 84-
 - Application pipeline with compensation, exact workbook status, current round, next action, and notes
 - Overview with active applications, interviews, offers, and overdue follow-ups
 - 12-week LeetCode plan with daily focus, timer, progress, confidence, and written journals
+- AI code coach: paste a solution, compare it with current online references, and save correctness, complexity, edge-case, and interview feedback
 - JSON backup/restore and CSV import for application data
 - Local-only storage and workbook access: personal records are not built into the repository or sent to an external server
 
@@ -27,6 +28,16 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+## One-time AI code-review setup
+
+The AI reviewer needs an OpenAI API key. The key stays in the local server and is never placed in browser code or committed to GitHub.
+
+1. Copy `.env.example` to a new file named `.env.local`.
+2. Add your key after `OPENAI_API_KEY=`.
+3. Restart Job Hub.
+
+The default review model is `gpt-5.6-sol`. You can change `OPENAI_MODEL` in `.env.local` if your account uses a different available model. AI review uses OpenAI web search to compare your submission with current public problem references; it can make mistakes and does not replace running LeetCode tests.
 
 ## Workbook connection
 
@@ -49,4 +60,4 @@ npm test
 
 ## Privacy
 
-The repository contains no private application rows. The local server reads the workbook directly, while coding progress, manually added roles, and journals are stored in browser local storage. Use **Data & backup** inside the app to export them before switching browsers or computers.
+The repository contains no private application rows. The local server reads the workbook directly, while coding progress, manually added roles, journals, pasted code, and saved AI reviews are stored in browser local storage. Your pasted code is sent to OpenAI only when you press **Evaluate my code**. Use **Data & backup** inside the app to export local records before switching browsers or computers.

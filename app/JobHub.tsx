@@ -13,6 +13,40 @@ type ApplicationStatus =
   | "Rejected"
   | "Closed";
 type PrepStatus = "Not Started" | "Attempted" | "Solved with Hint" | "Solved Independently";
+type ReviewVerdict = "Correct" | "Mostly correct" | "Incorrect" | "Needs more context";
+
+type CodeReview = {
+  verdict: ReviewVerdict;
+  score: number;
+  summary: string;
+  correctness: string;
+  complexity: {
+    time: string;
+    space: string;
+    assessment: string;
+  };
+  issues: Array<{
+    severity: "Critical" | "Important" | "Minor";
+    title: string;
+    detail: string;
+    fix: string;
+  }>;
+  edgeCases: Array<{
+    case: string;
+    expected: string;
+    why: string;
+  }>;
+  referenceApproach: string;
+  interviewFeedback: {
+    strongPoint: string;
+    improve: string;
+    explanationOutline: string;
+  };
+  nextAction: string;
+  sources: Array<{ title: string; url: string }>;
+  reviewedAt: string;
+  model: string;
+};
 
 type Application = {
   id: string;
@@ -60,6 +94,9 @@ type ProblemProgress = {
   mistakes: string;
   explanation: string;
   lastAttempt: string;
+  code: string;
+  codeLanguage: string;
+  codeReview: CodeReview | null;
 };
 
 type Settings = {
@@ -95,6 +132,9 @@ const emptyProgress: ProblemProgress = {
   mistakes: "",
   explanation: "",
   lastAttempt: "",
+  code: "",
+  codeLanguage: "",
+  codeReview: null,
 };
 
 function pad(value: number) {
@@ -279,6 +319,8 @@ export default function JobHub() {
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerProblemId, setTimerProblemId] = useState<number | null>(null);
+  const [reviewRunning, setReviewRunning] = useState(false);
+  const [reviewError, setReviewError] = useState("");
   const [toast, setToast] = useState("");
   const [sheetSync, setSheetSync] = useState<SheetSyncState>({
     status: "connecting",
@@ -448,8 +490,14 @@ export default function JobHub() {
   }
 
   function openProblem(problem: InterviewProblem) {
+    const saved = progress[String(problem.id)];
     setSelectedProblem(problem);
-    setProblemDraft(progress[String(problem.id)] ?? emptyProgress);
+    setProblemDraft({
+      ...emptyProgress,
+      ...saved,
+      codeLanguage: saved?.codeLanguage || settings.primaryLanguage,
+    });
+    setReviewError("");
   }
 
   function saveProblemJournal() {
@@ -457,6 +505,43 @@ export default function JobHub() {
     setProgress((items) => ({ ...items, [String(selectedProblem.id)]: problemDraft }));
     setSelectedProblem(null);
     showToast("Problem journal saved");
+  }
+
+  async function evaluateCode() {
+    if (!selectedProblem || reviewRunning) return;
+    if (!problemDraft.code.trim()) {
+      setReviewError("Paste your solution code first.");
+      return;
+    }
+
+    setReviewRunning(true);
+    setReviewError("");
+    try {
+      const response = await fetch("/api/code-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: selectedProblem.title,
+          problemUrl: selectedProblem.url,
+          pattern: selectedProblem.pattern,
+          language: problemDraft.codeLanguage || settings.primaryLanguage,
+          code: problemDraft.code,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.review) {
+        throw new Error(payload.error || "The AI review could not be completed.");
+      }
+
+      const updated = { ...problemDraft, codeReview: payload.review as CodeReview };
+      setProblemDraft(updated);
+      setProgress((items) => ({ ...items, [String(selectedProblem.id)]: updated }));
+      showToast("AI code review saved");
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : "The AI review could not be completed.");
+    } finally {
+      setReviewRunning(false);
+    }
   }
 
   function quickUpdateProblem(problem: InterviewProblem, status: PrepStatus) {
@@ -853,6 +938,53 @@ export default function JobHub() {
               <label>Mistakes / bug cause<textarea rows={3} value={problemDraft.mistakes} onChange={(event) => setProblemDraft({ ...problemDraft, mistakes: event.target.value })} placeholder="What went wrong and why?" /></label>
               <label>60-second explanation<textarea rows={3} value={problemDraft.explanation} onChange={(event) => setProblemDraft({ ...problemDraft, explanation: event.target.value })} placeholder="Your interview-ready summary." /></label>
             </div>
+            <section className="code-review-lab" aria-labelledby="code-review-heading">
+              <div className="code-review-heading">
+                <div><p className="eyebrow">AI code coach</p><h3 id="code-review-heading">Compare your code with online references.</h3><p>AI checks your approach against the current problem and established strategies. It coaches; it does not paste a full answer.</p></div>
+                <span className="online-badge"><i />Online research</span>
+              </div>
+              <div className="code-review-controls">
+                <label>Language<select value={problemDraft.codeLanguage || settings.primaryLanguage} onChange={(event) => setProblemDraft({ ...problemDraft, codeLanguage: event.target.value, codeReview: null })}><option>Python</option><option>TypeScript</option><option>JavaScript</option><option>Java</option><option>C++</option><option>C#</option><option>Go</option><option>Rust</option><option>Swift</option><option>Kotlin</option></select></label>
+                <span>Your code is sent to OpenAI only when you request a review.</span>
+                <button className="review-button" disabled={reviewRunning || !problemDraft.code.trim()} onClick={() => void evaluateCode()}>{reviewRunning ? "Researching & reviewing…" : problemDraft.codeReview ? "Review again" : "Evaluate my code"}</button>
+              </div>
+              <label className="code-input-label">Paste your solution<textarea className="code-input" rows={14} spellCheck={false} value={problemDraft.code} onChange={(event) => setProblemDraft({ ...problemDraft, code: event.target.value, codeReview: null })} placeholder={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution here…`} /></label>
+              {reviewRunning && <div className="review-loading" role="status"><span /><div><strong>Checking the problem and your approach…</strong><small>This usually takes under a minute.</small></div></div>}
+              {reviewError && <div className="review-error" role="alert"><strong>Review could not run</strong><span>{reviewError}</span><small>If setup is needed, create <code>.env.local</code>, add <code>OPENAI_API_KEY=your-key</code>, then restart Job Hub.</small></div>}
+              {problemDraft.codeReview && (
+                <div className="review-result">
+                  <div className="review-score-row">
+                    <div className={`verdict-badge verdict-${problemDraft.codeReview.verdict.toLowerCase().replaceAll(" ", "-")}`}>{problemDraft.codeReview.verdict}</div>
+                    <div className="review-score"><strong>{problemDraft.codeReview.score}</strong><span>/100</span></div>
+                    <div><strong>{problemDraft.codeReview.summary}</strong><small>Reviewed {formatSyncTime(problemDraft.codeReview.reviewedAt)} · {problemDraft.codeReview.model}</small></div>
+                  </div>
+                  <div className="review-two-column">
+                    <article><p className="eyebrow">Correctness</p><p>{problemDraft.codeReview.correctness}</p></article>
+                    <article><p className="eyebrow">Complexity</p><div className="complexity-pills"><span>Time <b>{problemDraft.codeReview.complexity.time}</b></span><span>Space <b>{problemDraft.codeReview.complexity.space}</b></span></div><p>{problemDraft.codeReview.complexity.assessment}</p></article>
+                  </div>
+                  <div className="review-section">
+                    <div className="review-section-title"><p className="eyebrow">Findings</p><h4>{problemDraft.codeReview.issues.length ? `${problemDraft.codeReview.issues.length} thing${problemDraft.codeReview.issues.length === 1 ? "" : "s"} to inspect` : "No major issues found"}</h4></div>
+                    {problemDraft.codeReview.issues.length > 0 && <div className="issue-list">{problemDraft.codeReview.issues.map((issue, index) => <article key={`${issue.title}-${index}`}><span className={`severity severity-${issue.severity.toLowerCase()}`}>{issue.severity}</span><div><strong>{issue.title}</strong><p>{issue.detail}</p><small><b>Fix:</b> {issue.fix}</small></div></article>)}</div>}
+                  </div>
+                  <div className="review-two-column">
+                    <article><p className="eyebrow">Reference approach</p><p>{problemDraft.codeReview.referenceApproach}</p></article>
+                    <article><p className="eyebrow">Your next action</p><p>{problemDraft.codeReview.nextAction}</p></article>
+                  </div>
+                  <div className="review-section">
+                    <div className="review-section-title"><p className="eyebrow">Edge-case test deck</p><h4>Try these before submitting</h4></div>
+                    <div className="edge-case-grid">{problemDraft.codeReview.edgeCases.map((edgeCase, index) => <article key={`${edgeCase.case}-${index}`}><strong>{edgeCase.case}</strong><span>Expected: {edgeCase.expected}</span><small>{edgeCase.why}</small></article>)}</div>
+                  </div>
+                  <div className="interview-coach-card">
+                    <p className="eyebrow">Interview explanation</p>
+                    <div><strong>Strong point</strong><span>{problemDraft.codeReview.interviewFeedback.strongPoint}</span></div>
+                    <div><strong>Improve</strong><span>{problemDraft.codeReview.interviewFeedback.improve}</span></div>
+                    <div><strong>60-second outline</strong><span>{problemDraft.codeReview.interviewFeedback.explanationOutline}</span></div>
+                  </div>
+                  {problemDraft.codeReview.sources.length > 0 && <div className="review-sources"><span>References checked</span>{problemDraft.codeReview.sources.map((source) => <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>{source.title} ↗</a>)}</div>}
+                  <p className="review-disclaimer">AI feedback can be wrong and does not execute your code. Confirm with LeetCode tests before marking the problem solved.</p>
+                </div>
+              )}
+            </section>
             <div className="modal-actions"><span /><button className="secondary-button" onClick={() => setSelectedProblem(null)}>Cancel</button><button className="primary-button" onClick={saveProblemJournal}>Save journal</button></div>
           </section>
         </div>
