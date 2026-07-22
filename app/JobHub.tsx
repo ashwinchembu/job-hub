@@ -694,15 +694,30 @@ export default function JobHub() {
     setTimerRunning(false);
     if (!timerProblemId || timerSeconds < 1) return;
     const minutes = Math.max(1, Math.ceil(timerSeconds / 60));
-    setProgress((items) => ({
-      ...items,
-      [String(timerProblemId)]: {
-        ...(items[String(timerProblemId)] ?? emptyProgress),
-        minutes: (items[String(timerProblemId)]?.minutes ?? 0) + minutes,
-        status: items[String(timerProblemId)]?.status === "Solved Independently" ? "Solved Independently" : "Attempted",
+    const timerKey = String(timerProblemId);
+    if (selectedProblem?.id === timerProblemId) {
+      const updatedDraft: ProblemProgress = {
+        ...problemDraft,
+        minutes: problemDraft.minutes + minutes,
+        status: problemDraft.status === "Not Started" ? "Attempted" : problemDraft.status,
         lastAttempt: today,
-      },
-    }));
+      };
+      setProblemDraft(updatedDraft);
+      setProgress((items) => ({ ...items, [timerKey]: updatedDraft }));
+    } else {
+      setProgress((items) => {
+        const current = normalizeStoredProgress(items[timerKey]);
+        return {
+          ...items,
+          [timerKey]: {
+            ...current,
+            minutes: current.minutes + minutes,
+            status: current.status === "Not Started" ? "Attempted" : current.status,
+            lastAttempt: today,
+          },
+        };
+      });
+    }
     setTimerSeconds(0);
     showToast(`${minutes} practice minute${minutes === 1 ? "" : "s"} saved`);
   }
@@ -1081,6 +1096,15 @@ export default function JobHub() {
             <div className="modal-header"><div><p className="eyebrow">Day {selectedProblem.day} · Week {selectedProblem.week}</p><h2 id="journal-title">{selectedProblem.title}</h2><p>{selectedProblem.pattern} · {selectedProblem.targetMinutes} minute target</p></div><button className="close-button" onClick={() => setSelectedProblem(null)} aria-label="Close">×</button></div>
             <div className="journal-callout"><strong>Recognition cue</strong><span>{selectedProblem.cue}</span><a href={selectedProblem.url} target="_blank" rel="noreferrer">Open LeetCode ↗</a></div>
             <div className="journal-status-row"><label>Status<select value={problemDraft.status} onChange={(event) => setProblemDraft({ ...problemDraft, status: event.target.value as PrepStatus, codeReview: null })}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select></label><label>Confidence<select value={problemDraft.confidence} onChange={(event) => setProblemDraft({ ...problemDraft, confidence: Number(event.target.value), codeReview: null })}><option value="0">Not rated</option><option value="1">1 — Cannot reproduce</option><option value="2">2 — Need notes</option><option value="3">3 — Mostly clear</option><option value="4">4 — Can re-code</option><option value="5">5 — Can explain cold</option></select></label><label>Minutes<input type="number" min="0" value={problemDraft.minutes} onChange={(event) => setProblemDraft({ ...problemDraft, minutes: Number(event.target.value), codeReview: null })} /></label></div>
+            <div className={`journal-timer ${timerRunning && timerProblemId === selectedProblem.id ? "is-running" : ""}`}>
+              <div className="journal-timer-clock"><span>Practice timer</span><strong>{timerProblemId === selectedProblem.id ? formatTimer(timerSeconds) : "00:00"}</strong></div>
+              <p>{timerRunning && timerProblemId === selectedProblem.id ? "Timing this attempt now. Stop when you finish to add it to Minutes." : "Start here and keep the journal open while you solve. Time is saved when you stop."}</p>
+              {!timerRunning || timerProblemId !== selectedProblem.id ? (
+                <button type="button" className="journal-timer-button" onClick={() => startTimer(selectedProblem)}>▶ Start timer</button>
+              ) : (
+                <button type="button" className="journal-timer-button is-stop" onClick={stopTimer}>■ Stop & add time</button>
+              )}
+            </div>
             <div className="journal-grid">
               <label className="journal-wide">My brute-force approach <small>Describe the simplest correct method before optimizing.</small><textarea rows={4} value={problemDraft.naiveApproach} onChange={(event) => setProblemDraft({ ...problemDraft, naiveApproach: event.target.value, codeReview: null })} placeholder="What would the brute-force solution do, step by step?" /></label>
               <label>Brute-force time complexity<textarea rows={2} value={problemDraft.bruteForceTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n²), because…" /></label>
