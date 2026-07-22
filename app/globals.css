@@ -463,6 +463,35 @@ textarea:focus-visible {
   border: 1px solid rgba(255, 255, 255, 0.22);
 }
 
+.focus-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.progress-state {
+  min-height: 27px;
+  padding: 5px 9px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #d8e4df;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.progress-attempted,
+.progress-solved-with-hint,
+.progress-solved-independently {
+  border-color: rgba(216, 239, 128, 0.5);
+  background: rgba(216, 239, 128, 0.18);
+  color: var(--lime);
+}
+
 .pattern-label {
   margin: 5px 0 24px;
   color: #c7d8d1;
@@ -1219,6 +1248,12 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
+.journal-button.has-entry {
+  border-color: #9dcab5;
+  background: #eff9f3;
+  color: var(--green);
+}
+
 .data-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1453,6 +1488,14 @@ textarea:focus-visible {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.journal-grid label > small {
+  margin-top: -3px;
+  color: #73827c;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .code-review-lab {

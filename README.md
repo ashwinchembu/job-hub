@@ -37,7 +37,7 @@ The AI reviewer needs an OpenAI API key. The key stays in the local server and i
 2. Add your key after `OPENAI_API_KEY=`.
 3. Restart Job Hub.
 
-The default review model is `gpt-5.6-sol`. You can change `OPENAI_MODEL` in `.env.local` if your account uses a different available model. AI review uses OpenAI web search to compare your code, approach, invariant, complexity claim, edge cases, mistake reflection, and 60-second explanation with current public problem references. It returns a weighted scorecard and progressive hints, but it can make mistakes and does not replace running LeetCode tests.
+The default review model is `gpt-5.6-sol`. You can change `OPENAI_MODEL` in `.env.local` if your account uses a different available model. The journal defaults to Python 3 and keeps brute-force time/space, optimal time/space, algorithm steps, and the 60-second spoken explanation as separate answers. AI review uses OpenAI web search to compare every journal answer plus your code with current public problem references. It returns a weighted scorecard and progressive hints, but it can make mistakes and does not replace running LeetCode tests.
 
 ## Workbook connection
 

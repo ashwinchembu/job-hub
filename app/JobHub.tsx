@@ -108,9 +108,13 @@ type ProblemProgress = {
   confidence: number;
   minutes: number;
   naiveApproach: string;
+  bruteForceTimeComplexity: string;
+  bruteForceSpaceComplexity: string;
   invariant: string;
   solutionSteps: string;
-  complexity: string;
+  optimalTimeComplexity: string;
+  optimalSpaceComplexity: string;
+  complexity?: string;
   edgeCases: string;
   mistakes: string;
   explanation: string;
@@ -146,8 +150,12 @@ const emptyProgress: ProblemProgress = {
   confidence: 0,
   minutes: 0,
   naiveApproach: "",
+  bruteForceTimeComplexity: "",
+  bruteForceSpaceComplexity: "",
   invariant: "",
   solutionSteps: "",
+  optimalTimeComplexity: "",
+  optimalSpaceComplexity: "",
   complexity: "",
   edgeCases: "",
   mistakes: "",
@@ -162,13 +170,39 @@ function hasReviewableInput(item: ProblemProgress) {
   return [
     item.code,
     item.naiveApproach,
+    item.bruteForceTimeComplexity,
+    item.bruteForceSpaceComplexity,
     item.invariant,
     item.solutionSteps,
+    item.optimalTimeComplexity,
+    item.optimalSpaceComplexity,
     item.complexity,
     item.edgeCases,
     item.mistakes,
     item.explanation,
-  ].some((value) => value.trim());
+  ].some((value) => typeof value === "string" && value.trim());
+}
+
+function normalizeLanguage(language?: string) {
+  if (!language || language === "Python") return "Python 3";
+  return language;
+}
+
+function formatCoverageLabel(value: string) {
+  const labels: Record<string, string> = {
+    code: "Solution code",
+    bruteForceApproach: "Brute-force approach",
+    bruteForceTimeComplexity: "Brute-force time",
+    bruteForceSpaceComplexity: "Brute-force space",
+    invariant: "Invariant / decision rule",
+    optimalSteps: "Optimal algorithm steps",
+    optimalTimeComplexity: "Optimal time",
+    optimalSpaceComplexity: "Optimal space",
+    edgeCaseNotes: "Edge cases & tests",
+    mistakes: "Mistakes / bug cause",
+    explanation: "60-second spoken explanation",
+  };
+  return labels[value] || value;
 }
 
 function scoreCategories(breakdown: NonNullable<CodeReview["scoreBreakdown"]>) {
@@ -353,7 +387,7 @@ export default function JobHub() {
   const [ready, setReady] = useState(false);
   const [applications, setApplications] = useState<Application[]>([]);
   const [progress, setProgress] = useState<Record<string, ProblemProgress>>({});
-  const [settings, setSettings] = useState<Settings>({ startDate: today, primaryLanguage: "Python", weeklyGoal: 7 });
+  const [settings, setSettings] = useState<Settings>({ startDate: today, primaryLanguage: "Python 3", weeklyGoal: 7 });
   const [applicationDraft, setApplicationDraft] = useState<Application | null>(null);
   const [selectedProblem, setSelectedProblem] = useState<InterviewProblem | null>(null);
   const [problemDraft, setProblemDraft] = useState<ProblemProgress>(emptyProgress);
@@ -422,7 +456,10 @@ export default function JobHub() {
       const storedSettings = localStorage.getItem(SETTINGS_KEY);
       setApplications(storedApplications ? JSON.parse(storedApplications) : makeDemoApplications(localToday));
       setProgress(storedProgress ? JSON.parse(storedProgress) : {});
-      if (storedSettings) setSettings(JSON.parse(storedSettings));
+      if (storedSettings) {
+        const savedSettings = JSON.parse(storedSettings) as Settings;
+        setSettings({ ...savedSettings, primaryLanguage: normalizeLanguage(savedSettings.primaryLanguage) });
+      }
       setReady(true);
     });
     return () => window.cancelAnimationFrame(frame);
@@ -539,16 +576,27 @@ export default function JobHub() {
     setProblemDraft({
       ...emptyProgress,
       ...saved,
-      codeLanguage: saved?.codeLanguage || settings.primaryLanguage,
+      bruteForceTimeComplexity: saved?.bruteForceTimeComplexity || "",
+      bruteForceSpaceComplexity: saved?.bruteForceSpaceComplexity || "",
+      optimalTimeComplexity: saved?.optimalTimeComplexity || saved?.complexity || "",
+      optimalSpaceComplexity: saved?.optimalSpaceComplexity || "",
+      codeLanguage: normalizeLanguage(saved?.codeLanguage || settings.primaryLanguage),
     });
     setReviewError("");
   }
 
   function saveProblemJournal() {
     if (!selectedProblem) return;
-    setProgress((items) => ({ ...items, [String(selectedProblem.id)]: problemDraft }));
+    const markedAttempted = problemDraft.status === "Not Started";
+    const saved: ProblemProgress = {
+      ...problemDraft,
+      status: markedAttempted ? "Attempted" : problemDraft.status,
+      lastAttempt: today,
+      codeLanguage: normalizeLanguage(problemDraft.codeLanguage || settings.primaryLanguage),
+    };
+    setProgress((items) => ({ ...items, [String(selectedProblem.id)]: saved }));
     setSelectedProblem(null);
-    showToast("Problem journal saved");
+    showToast(markedAttempted ? "Journal saved · problem marked Attempted" : "Problem journal saved");
   }
 
   async function evaluateCode() {
@@ -573,10 +621,13 @@ export default function JobHub() {
           status: problemDraft.status,
           confidence: problemDraft.confidence,
           minutes: problemDraft.minutes,
-          naiveApproach: problemDraft.naiveApproach,
+          bruteForceApproach: problemDraft.naiveApproach,
+          bruteForceTimeComplexity: problemDraft.bruteForceTimeComplexity,
+          bruteForceSpaceComplexity: problemDraft.bruteForceSpaceComplexity,
           invariant: problemDraft.invariant,
-          solutionSteps: problemDraft.solutionSteps,
-          complexityClaim: problemDraft.complexity,
+          optimalSteps: problemDraft.solutionSteps,
+          optimalTimeComplexity: problemDraft.optimalTimeComplexity || problemDraft.complexity || "",
+          optimalSpaceComplexity: problemDraft.optimalSpaceComplexity,
           edgeCaseNotes: problemDraft.edgeCases,
           mistakes: problemDraft.mistakes,
           explanation: problemDraft.explanation,
@@ -702,7 +753,7 @@ export default function JobHub() {
     if (!window.confirm("Replace current application records and prep progress with fresh demo data?")) return;
     setApplications(makeDemoApplications(today));
     setProgress({});
-    setSettings({ startDate: today, primaryLanguage: "Python", weeklyGoal: 7 });
+    setSettings({ startDate: today, primaryLanguage: "Python 3", weeklyGoal: 7 });
     showToast("Demo data restored");
   }
 
@@ -715,6 +766,7 @@ export default function JobHub() {
 
   function renderOverview() {
     const todayProgress = progress[String(todayProblem.id)] ?? emptyProgress;
+    const todayHasSavedJournal = Boolean(progress[String(todayProblem.id)]);
     const nextMoves = applications
       .filter(
         (application) =>
@@ -753,7 +805,7 @@ export default function JobHub() {
           <article className="focus-card">
             <div className="card-heading-row">
               <div><p className="eyebrow">Today · Day {todayProblem.day}</p><h2>{todayProblem.title}</h2></div>
-              <span className={`difficulty difficulty-${todayProblem.difficulty.toLowerCase()}`}>{todayProblem.difficulty}</span>
+              <div className="focus-badges"><span className={`progress-state progress-${todayProgress.status.toLowerCase().replaceAll(" ", "-")}`}>{todayProgress.status}</span><span className={`difficulty difficulty-${todayProblem.difficulty.toLowerCase()}`}>{todayProblem.difficulty}</span></div>
             </div>
             <p className="pattern-label">{todayProblem.pattern}</p>
             <p className="focus-cue">“{todayProblem.cue}”</p>
@@ -770,7 +822,7 @@ export default function JobHub() {
                 ) : (
                   <button className="secondary-button danger-outline" onClick={stopTimer}>Stop & save</button>
                 )}
-                <button className="text-button" onClick={() => openProblem(todayProblem)}>Open journal →</button>
+                <button className="text-button" onClick={() => openProblem(todayProblem)}>{todayHasSavedJournal ? "Open saved journal →" : "Open journal →"}</button>
               </div>
             </div>
             <a className="leetcode-link" href={todayProblem.url} target="_blank" rel="noreferrer">Open problem on LeetCode ↗</a>
@@ -880,7 +932,7 @@ export default function JobHub() {
         </section>
         <section className="prep-controls">
           <label>Plan start<input type="date" value={settings.startDate} onChange={(event) => setSettings({ ...settings, startDate: event.target.value })} /></label>
-          <label>Primary language<select value={settings.primaryLanguage} onChange={(event) => setSettings({ ...settings, primaryLanguage: event.target.value })}><option>Python</option><option>TypeScript</option><option>Java</option><option>C++</option></select></label>
+          <label>Primary language<select value={settings.primaryLanguage} onChange={(event) => setSettings({ ...settings, primaryLanguage: event.target.value })}><option>Python 3</option><option>TypeScript</option><option>Java</option><option>C++</option></select></label>
           <div className="privacy-note">Notes and progress stay on this device.</div>
         </section>
         <div className="week-tabs" role="tablist" aria-label="Interview plan weeks">
@@ -893,6 +945,7 @@ export default function JobHub() {
         <section className="problem-list">
           {weekProblems.map((problem) => {
             const item = progress[String(problem.id)] ?? emptyProgress;
+            const hasSavedJournal = Boolean(progress[String(problem.id)]);
             const scheduledDate = addDays(settings.startDate, problem.day - 1);
             return (
               <article className={`problem-row ${problem.id === todayProblem.id ? "is-today" : ""}`} key={problem.id}>
@@ -901,7 +954,7 @@ export default function JobHub() {
                 <span className={`difficulty difficulty-${problem.difficulty.toLowerCase()}`}>{problem.difficulty}</span>
                 <span className="target-time">{problem.targetMinutes} min</span>
                 <select aria-label={`${problem.title} status`} value={item.status} onChange={(event) => quickUpdateProblem(problem, event.target.value as PrepStatus)}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select>
-                <button className="journal-button" onClick={() => openProblem(problem)}>Journal</button>
+                <button className={`journal-button ${hasSavedJournal ? "has-entry" : ""}`} onClick={() => openProblem(problem)}>{hasSavedJournal ? "✓ Journal saved" : "Journal"}</button>
               </article>
             );
           })}
@@ -989,25 +1042,28 @@ export default function JobHub() {
             <div className="journal-callout"><strong>Recognition cue</strong><span>{selectedProblem.cue}</span><a href={selectedProblem.url} target="_blank" rel="noreferrer">Open LeetCode ↗</a></div>
             <div className="journal-status-row"><label>Status<select value={problemDraft.status} onChange={(event) => setProblemDraft({ ...problemDraft, status: event.target.value as PrepStatus, codeReview: null })}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select></label><label>Confidence<select value={problemDraft.confidence} onChange={(event) => setProblemDraft({ ...problemDraft, confidence: Number(event.target.value), codeReview: null })}><option value="0">Not rated</option><option value="1">1 — Cannot reproduce</option><option value="2">2 — Need notes</option><option value="3">3 — Mostly clear</option><option value="4">4 — Can re-code</option><option value="5">5 — Can explain cold</option></select></label><label>Minutes<input type="number" min="0" value={problemDraft.minutes} onChange={(event) => setProblemDraft({ ...problemDraft, minutes: Number(event.target.value), codeReview: null })} /></label></div>
             <div className="journal-grid">
-              <label>My naive approach<textarea rows={4} value={problemDraft.naiveApproach} onChange={(event) => setProblemDraft({ ...problemDraft, naiveApproach: event.target.value, codeReview: null })} placeholder="What would the brute-force solution do?" /></label>
-              <label>Key invariant / decision rule<textarea rows={4} value={problemDraft.invariant} onChange={(event) => setProblemDraft({ ...problemDraft, invariant: event.target.value, codeReview: null })} placeholder="What stays true after every step?" /></label>
-              <label className="journal-wide">Optimal steps in plain English<textarea rows={5} value={problemDraft.solutionSteps} onChange={(event) => setProblemDraft({ ...problemDraft, solutionSteps: event.target.value, codeReview: null })} placeholder="Explain the algorithm without code syntax." /></label>
-              <label>Complexity<textarea rows={3} value={problemDraft.complexity} onChange={(event) => setProblemDraft({ ...problemDraft, complexity: event.target.value, codeReview: null })} placeholder="Time and space, with variables." /></label>
+              <label className="journal-wide">My brute-force approach <small>Describe the simplest correct method before optimizing.</small><textarea rows={4} value={problemDraft.naiveApproach} onChange={(event) => setProblemDraft({ ...problemDraft, naiveApproach: event.target.value, codeReview: null })} placeholder="What would the brute-force solution do, step by step?" /></label>
+              <label>Brute-force time complexity<textarea rows={2} value={problemDraft.bruteForceTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n²), because…" /></label>
+              <label>Brute-force space complexity<textarea rows={2} value={problemDraft.bruteForceSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceSpaceComplexity: event.target.value, codeReview: null })} placeholder="Example: O(1) auxiliary space, because…" /></label>
+              <label className="journal-wide">Key invariant / decision rule<textarea rows={4} value={problemDraft.invariant} onChange={(event) => setProblemDraft({ ...problemDraft, invariant: event.target.value, codeReview: null })} placeholder="What stays true after every step, and why is each choice safe?" /></label>
+              <label className="journal-wide">Optimal algorithm steps <small>This is the procedure, not code and not your spoken answer.</small><textarea rows={5} value={problemDraft.solutionSteps} onChange={(event) => setProblemDraft({ ...problemDraft, solutionSteps: event.target.value, codeReview: null })} placeholder="Write the optimized algorithm step by step in plain English." /></label>
+              <label>Optimal time complexity<textarea rows={2} value={problemDraft.optimalTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n), because each item…" /></label>
+              <label>Optimal space complexity<textarea rows={2} value={problemDraft.optimalSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalSpaceComplexity: event.target.value, codeReview: null })} placeholder="State auxiliary space and explain it." /></label>
               <label>Edge cases & tests<textarea rows={3} value={problemDraft.edgeCases} onChange={(event) => setProblemDraft({ ...problemDraft, edgeCases: event.target.value, codeReview: null })} placeholder="Empty, duplicates, boundaries…" /></label>
               <label>Mistakes / bug cause<textarea rows={3} value={problemDraft.mistakes} onChange={(event) => setProblemDraft({ ...problemDraft, mistakes: event.target.value, codeReview: null })} placeholder="What went wrong and why?" /></label>
-              <label>60-second explanation<textarea rows={3} value={problemDraft.explanation} onChange={(event) => setProblemDraft({ ...problemDraft, explanation: event.target.value, codeReview: null })} placeholder="Your interview-ready summary." /></label>
+              <label className="journal-wide">60-second spoken explanation <small>Your interview answer: problem, brute-force tradeoff, optimal insight, steps, and complexity.</small><textarea rows={4} value={problemDraft.explanation} onChange={(event) => setProblemDraft({ ...problemDraft, explanation: event.target.value, codeReview: null })} placeholder="Write what you would actually say aloud to the interviewer in about 60 seconds." /></label>
             </div>
             <section className="code-review-lab" aria-labelledby="code-review-heading">
               <div className="code-review-heading">
-                <div><p className="eyebrow">AI submission coach</p><h3 id="code-review-heading">Score your code and your explanation.</h3><p>AI reads every journal field above plus your code, compares them with current references, and returns a weighted score, explanation feedback, and progressive hints.</p></div>
+                <div><p className="eyebrow">AI submission coach</p><h3 id="code-review-heading">Score your full {problemDraft.codeLanguage || settings.primaryLanguage} submission.</h3><p>AI reviews your brute force, optimal algorithm, all four complexity answers, spoken explanation, and code as separate evidence.</p></div>
                 <span className="online-badge"><i />Online research</span>
               </div>
               <div className="code-review-controls">
-                <label>Language<select value={problemDraft.codeLanguage || settings.primaryLanguage} onChange={(event) => setProblemDraft({ ...problemDraft, codeLanguage: event.target.value, codeReview: null })}><option>Python</option><option>TypeScript</option><option>JavaScript</option><option>Java</option><option>C++</option><option>C#</option><option>Go</option><option>Rust</option><option>Swift</option><option>Kotlin</option></select></label>
+                <label>Language<select value={problemDraft.codeLanguage || settings.primaryLanguage} onChange={(event) => setProblemDraft({ ...problemDraft, codeLanguage: event.target.value, codeReview: null })}><option>Python 3</option><option>TypeScript</option><option>JavaScript</option><option>Java</option><option>C++</option><option>C#</option><option>Go</option><option>Rust</option><option>Swift</option><option>Kotlin</option></select></label>
                 <span>Your code and journal answers are sent to OpenAI only when you request a review.</span>
                 <button className="review-button" disabled={reviewRunning || !hasReviewableInput(problemDraft)} onClick={() => void evaluateCode()}>{reviewRunning ? "Scoring your work…" : problemDraft.codeReview ? "Score again" : "Score all my work"}</button>
               </div>
-              <label className="code-input-label">Paste your solution <small>Optional if you only want feedback on your explanation.</small><textarea className="code-input" rows={14} spellCheck={false} value={problemDraft.code} onChange={(event) => setProblemDraft({ ...problemDraft, code: event.target.value, codeReview: null })} placeholder={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution here…`} /></label>
+              <label className="code-input-label">Paste your {problemDraft.codeLanguage || settings.primaryLanguage} solution <small>Kept separate from both the algorithm steps and your 60-second spoken explanation.</small><textarea className="code-input" rows={14} spellCheck={false} value={problemDraft.code} onChange={(event) => setProblemDraft({ ...problemDraft, code: event.target.value, codeReview: null })} placeholder={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution here…`} /></label>
               {reviewRunning && <div className="review-loading" role="status"><span /><div><strong>Checking your code, reasoning, and explanation…</strong><small>This usually takes under a minute.</small></div></div>}
               {reviewError && <div className="review-error" role="alert"><strong>Review could not run</strong><span>{reviewError}</span><small>If setup is needed, create <code>.env.local</code>, add <code>OPENAI_API_KEY=your-key</code>, then restart Job Hub.</small></div>}
               {problemDraft.codeReview && (
@@ -1021,7 +1077,7 @@ export default function JobHub() {
                     <div className="score-breakdown">
                       <div className="score-breakdown-heading"><div><p className="eyebrow">Weighted scorecard</p><h4>How every part of your submission scored</h4></div>{problemDraft.codeReview.inputCoverage && <span>{problemDraft.codeReview.inputCoverage.used.length} inputs reviewed</span>}</div>
                       <div className="score-bars">{scoreCategories(problemDraft.codeReview.scoreBreakdown).map((category) => <div className="score-bar-row" key={category.label}><div><strong>{category.label}</strong><small>{category.weight} of total</small></div><div className="score-bar-track"><span style={{ width: `${category.score}%` }} /></div><b>{category.score}</b></div>)}</div>
-                      {problemDraft.codeReview.inputCoverage && <div className="input-coverage"><div><strong>Evidence used</strong>{problemDraft.codeReview.inputCoverage.used.map((item) => <span className="coverage-chip used" key={item}>✓ {item}</span>)}</div>{problemDraft.codeReview.inputCoverage.missing.length > 0 && <div><strong>Still missing</strong>{problemDraft.codeReview.inputCoverage.missing.map((item) => <span className="coverage-chip missing" key={item}>+ {item}</span>)}</div>}</div>}
+                      {problemDraft.codeReview.inputCoverage && <div className="input-coverage"><div><strong>Evidence used</strong>{problemDraft.codeReview.inputCoverage.used.map((item) => <span className="coverage-chip used" key={item}>✓ {formatCoverageLabel(item)}</span>)}</div>{problemDraft.codeReview.inputCoverage.missing.length > 0 && <div><strong>Still missing</strong>{problemDraft.codeReview.inputCoverage.missing.map((item) => <span className="coverage-chip missing" key={item}>+ {formatCoverageLabel(item)}</span>)}</div>}</div>}
                     </div>
                   )}
                   <div className="review-two-column">
