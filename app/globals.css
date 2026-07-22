@@ -1646,6 +1646,33 @@ textarea:focus-visible {
   line-height: 1.4;
 }
 
+.journal-hint,
+.journal-grid label > small.journal-hint,
+.code-input-label > small.journal-hint {
+  padding: 7px 8px;
+  display: block;
+  border-radius: 8px;
+  background: #f2f5ee;
+  color: #65756e;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.journal-hint b {
+  margin-right: 4px;
+  color: var(--green);
+  font-size: 9px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.journal-status-row .journal-hint,
+.journal-grid .journal-hint {
+  min-height: 46px;
+}
+
 .code-review-lab {
   margin: 0 26px 26px;
   overflow: hidden;
@@ -2535,6 +2562,11 @@ textarea:focus-visible {
 
   .journal-timer-button {
     width: 100%;
+  }
+
+  .journal-status-row .journal-hint,
+  .journal-grid .journal-hint {
+    min-height: 0;
   }
 
   .form-wide,
