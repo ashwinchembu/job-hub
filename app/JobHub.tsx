@@ -413,6 +413,8 @@ export default function JobHub() {
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerProblemId, setTimerProblemId] = useState<number | null>(null);
+  const [focusDayOffset, setFocusDayOffset] = useState(0);
+  const [focusSlideDirection, setFocusSlideDirection] = useState<"forward" | "back">("forward");
   const [reviewRunning, setReviewRunning] = useState(false);
   const [reviewError, setReviewError] = useState("");
   const [toast, setToast] = useState("");
@@ -781,9 +783,23 @@ export default function JobHub() {
     showToast("Local data cleared");
   }
 
+  function moveFocusCarousel(step: -1 | 1) {
+    setFocusSlideDirection(step > 0 ? "forward" : "back");
+    setFocusDayOffset((current) => {
+      const normalized = Math.max(0, Math.min(83 - planDayIndex, current));
+      return Math.max(0, Math.min(83 - planDayIndex, normalized + step));
+    });
+  }
+
   function renderOverview() {
-    const todayProgress = progress[String(todayProblem.id)] ?? emptyProgress;
-    const todayHasSavedJournal = Boolean(progress[String(todayProblem.id)]);
+    const focusProblemIndex = Math.max(planDayIndex, Math.min(83, planDayIndex + focusDayOffset));
+    const focusProblem = interviewPlan[focusProblemIndex];
+    const focusOffset = focusProblemIndex - planDayIndex;
+    const focusProgress = progress[String(focusProblem.id)] ?? emptyProgress;
+    const focusHasSavedJournal = Boolean(progress[String(focusProblem.id)]);
+    const focusScheduledDate = addDays(settings.startDate, focusProblem.day - 1);
+    const focusDayLabel = focusOffset === 0 ? "Today" : focusOffset === 1 ? "Tomorrow" : `In ${focusOffset} days`;
+    const focusDateLabel = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(new Date(`${focusScheduledDate}T12:00:00`));
     const nextMoves = applications
       .filter(
         (application) =>
@@ -820,29 +836,36 @@ export default function JobHub() {
 
         <section className="overview-grid">
           <article className="focus-card">
-            <div className="card-heading-row">
-              <div><p className="eyebrow">Today · Day {todayProblem.day}</p><h2>{todayProblem.title}</h2></div>
-              <div className="focus-badges"><span className={`progress-state progress-${todayProgress.status.toLowerCase().replaceAll(" ", "-")}`}>{todayProgress.status}</span><span className={`difficulty difficulty-${todayProblem.difficulty.toLowerCase()}`}>{todayProblem.difficulty}</span></div>
-            </div>
-            <p className="pattern-label">{todayProblem.pattern}</p>
-            <p className="focus-cue">“{todayProblem.cue}”</p>
-            <div className="focus-meta">
-              <span><b>{todayProblem.targetMinutes}</b> min target</span>
-              <span><b>{settings.primaryLanguage}</b> language</span>
-              <span><b>{todayProgress.minutes}</b> min logged</span>
-            </div>
-            <div className="timer-panel">
-              <div><span>Session timer</span><strong>{timerProblemId === todayProblem.id ? formatTimer(timerSeconds) : "00:00"}</strong></div>
-              <div className="button-row">
-                {!timerRunning || timerProblemId !== todayProblem.id ? (
-                  <button className="secondary-button" onClick={() => startTimer(todayProblem)}>Start timer</button>
-                ) : (
-                  <button className="secondary-button danger-outline" onClick={stopTimer}>Stop & save</button>
-                )}
-                <button className="text-button" onClick={() => openProblem(todayProblem)}>{todayHasSavedJournal ? "Open saved journal →" : "Open journal →"}</button>
+            <button className="focus-carousel-arrow focus-carousel-previous" type="button" aria-label={focusOffset === 1 ? "Back to today's problem" : "Show previous scheduled problem"} disabled={focusOffset === 0} onClick={() => moveFocusCarousel(-1)}>‹</button>
+            <div className={`focus-card-content slide-${focusSlideDirection}`} key={focusProblem.id} aria-live="polite">
+              <div className="card-heading-row">
+                <div><p className="eyebrow">{focusDayLabel} · {focusDateLabel} · Day {focusProblem.day}</p><h2>{focusProblem.title}</h2></div>
+                <div className="focus-badges"><span className={`progress-state progress-${focusProgress.status.toLowerCase().replaceAll(" ", "-")}`}>{focusProgress.status}</span><span className={`difficulty difficulty-${focusProblem.difficulty.toLowerCase()}`}>{focusProblem.difficulty}</span></div>
+              </div>
+              <p className="pattern-label">{focusProblem.pattern}</p>
+              <p className="focus-cue">“{focusProblem.cue}”</p>
+              <div className="focus-meta">
+                <span><b>{focusProblem.targetMinutes}</b> min target</span>
+                <span><b>{settings.primaryLanguage}</b> language</span>
+                <span><b>{focusProgress.minutes}</b> min logged</span>
+              </div>
+              <div className="timer-panel">
+                <div><span>Session timer</span><strong>{timerProblemId === focusProblem.id ? formatTimer(timerSeconds) : "00:00"}</strong></div>
+                <div className="button-row">
+                  {!timerRunning || timerProblemId !== focusProblem.id ? (
+                    <button className="secondary-button" onClick={() => startTimer(focusProblem)}>Start timer</button>
+                  ) : (
+                    <button className="secondary-button danger-outline" onClick={stopTimer}>Stop & save</button>
+                  )}
+                  <button className="text-button" onClick={() => openProblem(focusProblem)}>{focusHasSavedJournal ? "Open saved journal →" : "Open journal →"}</button>
+                </div>
+              </div>
+              <div className="focus-card-footer">
+                <a className="leetcode-link" href={focusProblem.url} target="_blank" rel="noreferrer">Open problem on LeetCode ↗</a>
+                <span>{focusProblemIndex + 1} of {interviewPlan.length}</span>
               </div>
             </div>
-            <a className="leetcode-link" href={todayProblem.url} target="_blank" rel="noreferrer">Open problem on LeetCode ↗</a>
+            <button className="focus-carousel-arrow focus-carousel-next" type="button" aria-label={focusOffset === 0 ? "Show tomorrow's problem" : "Show next scheduled problem"} disabled={focusProblemIndex === interviewPlan.length - 1} onClick={() => moveFocusCarousel(1)}>›</button>
           </article>
 
           <article className="pipeline-card">
