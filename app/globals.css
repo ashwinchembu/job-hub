@@ -199,6 +199,11 @@ textarea:focus-visible {
   box-shadow: 0 0 0 4px rgba(216, 239, 128, 0.12);
 }
 
+.local-dot.has-error {
+  background: var(--orange);
+  box-shadow: 0 0 0 4px rgba(238, 117, 75, 0.14);
+}
+
 .main-content {
   grid-column: 2;
   width: min(1500px, 100%);
@@ -715,6 +720,70 @@ textarea:focus-visible {
   font-size: 12px;
 }
 
+.sheet-sync-banner {
+  margin: -10px 0 20px;
+  padding: 13px 15px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid #b9d5c8;
+  border-radius: 13px;
+  background: #eff9f3;
+  color: var(--green);
+}
+
+.sheet-sync-banner.sync-connecting {
+  border-color: #ead89c;
+  background: #fff9e4;
+  color: #705d16;
+}
+
+.sheet-sync-banner.sync-error {
+  border-color: #efb5a4;
+  background: #fff0ea;
+  color: var(--red);
+}
+
+.sheet-sync-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 13%, transparent);
+}
+
+.sheet-sync-banner > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.sheet-sync-banner small {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-sync-banner button {
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.58);
+  color: inherit;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.sheet-sync-banner button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .demo-banner button {
   border: 0;
   background: transparent;
@@ -848,6 +917,21 @@ textarea:focus-visible {
 
 .application-row > div > strong:not(.date-overdue) {
   font-size: 12px;
+}
+
+.application-row > div:nth-child(3) > strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.next-action-copy {
+  max-width: 210px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-pill,
@@ -1277,10 +1361,29 @@ textarea:focus-visible {
 }
 
 .form-grid {
+  min-width: 0;
+  margin: 0;
   padding: 22px 26px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 15px;
+  border: 0;
+}
+
+.sheet-record-note {
+  margin: 18px 26px 0;
+  padding: 12px 14px;
+  display: grid;
+  gap: 3px;
+  border: 1px solid #b9d5c8;
+  border-radius: 11px;
+  background: #eff9f3;
+  color: var(--green);
+  font-size: 11px;
+}
+
+.sheet-record-note span {
+  color: var(--ink-soft);
 }
 
 .form-grid label,
@@ -1505,6 +1608,15 @@ textarea:focus-visible {
   .prep-controls {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .sheet-sync-banner {
+    grid-template-columns: auto 1fr;
+  }
+
+  .sheet-sync-banner button {
+    grid-column: 2;
+    justify-self: start;
   }
 
   .select-field,

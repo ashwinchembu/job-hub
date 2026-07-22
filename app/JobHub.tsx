@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { interviewPlan, InterviewProblem, weekThemes } from "./data";
 
 type View = "overview" | "applications" | "prep" | "data";
@@ -28,7 +28,24 @@ type Application = {
   link: string;
   priority: "High" | "Medium" | "Low";
   notes: string;
+  workbookStatus?: string;
+  nextAction?: string;
+  currentRound?: string;
+  completedRounds?: number;
+  latestEmail?: string;
+  latestEmailSubject?: string;
+  resumePath?: string;
+  sheetSynced?: boolean;
   demo?: boolean;
+};
+
+type SheetSyncState = {
+  status: "connecting" | "connected" | "error";
+  workbook: string;
+  modifiedAt: string;
+  checkedAt: string;
+  rowCount: number;
+  message: string;
 };
 
 type ProblemProgress = {
@@ -54,6 +71,7 @@ type Settings = {
 const APPLICATIONS_KEY = "job-hub:applications:v1";
 const PROGRESS_KEY = "job-hub:problem-progress:v1";
 const SETTINGS_KEY = "job-hub:settings:v1";
+const SHEET_SYNC_INTERVAL_MS = 30_000;
 
 const applicationStatuses: ApplicationStatus[] = [
   "Saved",
@@ -110,6 +128,22 @@ function formatMoney(value: string) {
   const number = Number(value);
   if (!number) return "";
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(number);
+}
+
+function formatSyncTime(value: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function applicationKey(application: Pick<Application, "company" | "role">) {
+  return `${application.company}::${application.role}`.trim().toLowerCase();
 }
 
 function makeDemoApplications(today: string): Application[] {
@@ -246,7 +280,53 @@ export default function JobHub() {
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerProblemId, setTimerProblemId] = useState<number | null>(null);
   const [toast, setToast] = useState("");
+  const [sheetSync, setSheetSync] = useState<SheetSyncState>({
+    status: "connecting",
+    workbook: "",
+    modifiedAt: "",
+    checkedAt: "",
+    rowCount: 0,
+    message: "Connecting to the project tracker…",
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const syncApplicationsFromSheet = useCallback(async (announce = false) => {
+    setSheetSync((current) => ({ ...current, status: "connecting", message: "Checking the project tracker…" }));
+    try {
+      const response = await fetch("/api/job-tracker", { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok || !Array.isArray(payload.applications)) {
+        throw new Error(payload.error || "The project tracker could not be read.");
+      }
+
+      const sheetApplications = payload.applications as Application[];
+      const sheetKeys = new Set(sheetApplications.map(applicationKey));
+      setApplications((current) => [
+        ...sheetApplications,
+        ...current.filter(
+          (application) =>
+            !application.sheetSynced && !application.demo && !sheetKeys.has(applicationKey(application)),
+        ),
+      ]);
+      setSheetSync({
+        status: "connected",
+        workbook: payload.source.workbook,
+        modifiedAt: payload.source.modifiedAt,
+        checkedAt: payload.source.checkedAt,
+        rowCount: payload.source.rowCount,
+        message: "Applications are current with the workbook.",
+      });
+      if (announce) setToast(`${payload.source.rowCount} applications synced from the workbook`);
+    } catch (error) {
+      setSheetSync((current) => ({
+        ...current,
+        status: "error",
+        checkedAt: new Date().toISOString(),
+        message: error instanceof Error ? error.message : "The project tracker could not be read.",
+      }));
+      if (announce) setToast("Workbook sync failed");
+    }
+  }, []);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -266,6 +346,18 @@ export default function JobHub() {
     if (!ready) return;
     localStorage.setItem(APPLICATIONS_KEY, JSON.stringify(applications));
   }, [applications, ready]);
+
+  useEffect(() => {
+    if (!ready) return;
+    void syncApplicationsFromSheet();
+    const interval = window.setInterval(() => void syncApplicationsFromSheet(), SHEET_SYNC_INTERVAL_MS);
+    const syncOnFocus = () => void syncApplicationsFromSheet();
+    window.addEventListener("focus", syncOnFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", syncOnFocus);
+    };
+  }, [ready, syncApplicationsFromSheet]);
 
   useEffect(() => {
     if (!ready) return;
@@ -299,7 +391,9 @@ export default function JobHub() {
       const matchesStatus = statusFilter === "All" || application.status === statusFilter;
       const matchesQuery =
         !query ||
-        `${application.company} ${application.role} ${application.location} ${application.notes}`.toLowerCase().includes(query);
+        `${application.company} ${application.role} ${application.location} ${application.notes} ${application.nextAction ?? ""} ${application.latestEmailSubject ?? ""}`
+          .toLowerCase()
+          .includes(query);
       return matchesStatus && matchesQuery;
     });
   }, [applicationSearch, applications, statusFilter]);
@@ -477,9 +571,20 @@ export default function JobHub() {
 
   function renderOverview() {
     const todayProgress = progress[String(todayProblem.id)] ?? emptyProgress;
-    const nextFollowUps = applications
-      .filter((application) => application.followUpDate && !["Rejected", "Closed"].includes(application.status))
-      .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate))
+    const nextMoves = applications
+      .filter(
+        (application) =>
+          (application.followUpDate || application.nextAction) &&
+          !["Rejected", "Closed"].includes(application.status) &&
+          !application.nextAction?.toLowerCase().startsWith("no action"),
+      )
+      .sort((a, b) => {
+        if (a.followUpDate && b.followUpDate) return a.followUpDate.localeCompare(b.followUpDate);
+        if (a.followUpDate) return -1;
+        if (b.followUpDate) return 1;
+        const priorityRank = { High: 0, Medium: 1, Low: 2 };
+        return priorityRank[a.priority] - priorityRank[b.priority];
+      })
       .slice(0, 4);
 
     return (
@@ -546,13 +651,17 @@ export default function JobHub() {
         <section className="lower-grid">
           <article className="list-card">
             <div className="card-heading-row"><div><p className="eyebrow">Next moves</p><h2>Follow-up queue</h2></div></div>
-            {nextFollowUps.length ? nextFollowUps.map((application) => (
+            {nextMoves.length ? nextMoves.map((application) => (
               <button className="followup-row" key={application.id} onClick={() => setApplicationDraft(application)}>
                 <span className={`priority-marker priority-${application.priority.toLowerCase()}`} />
                 <span className="followup-main"><strong>{application.company}</strong><small>{application.role}</small></span>
-                <span className={application.followUpDate <= today ? "date-overdue" : ""}>{application.followUpDate <= today ? "Due " : ""}{formatHumanDate(application.followUpDate)}</span>
+                {application.followUpDate ? (
+                  <span className={application.followUpDate <= today ? "date-overdue" : ""}>{application.followUpDate <= today ? "Due " : ""}{formatHumanDate(application.followUpDate)}</span>
+                ) : (
+                  <span className="next-action-copy">{application.nextAction}</span>
+                )}
               </button>
-            )) : <div className="empty-state compact"><strong>No follow-ups scheduled</strong><span>Add a follow-up date to an application to see it here.</span></div>}
+            )) : <div className="empty-state compact"><strong>No next actions scheduled</strong><span>The workbook’s Next Action column will appear here automatically.</span></div>}
           </article>
 
           <article className="list-card">
@@ -575,9 +684,23 @@ export default function JobHub() {
     return (
       <>
         <section className="page-heading">
-          <div><p className="eyebrow">Application pipeline</p><h1>Every role. One next move.</h1><p>Track status, compensation, follow-ups, links, and the note that matters most.</p></div>
+          <div><p className="eyebrow">Application pipeline</p><h1>Every role. One next move.</h1><p>The Applications sheet is the source of truth. Job Hub checks it every 30 seconds and whenever you return to this window.</p></div>
           <button className="primary-button" onClick={openNewApplication}>+ Add application</button>
         </section>
+        <div className={`sheet-sync-banner sync-${sheetSync.status}`}>
+          <span className="sheet-sync-dot" />
+          <span>
+            <b>{sheetSync.status === "connected" ? `${sheetSync.rowCount} applications synced` : sheetSync.status === "connecting" ? "Syncing applications" : "Workbook sync needs attention"}</b>
+            <small>
+              {sheetSync.status === "connected"
+                ? `${sheetSync.workbook} · workbook updated ${formatSyncTime(sheetSync.modifiedAt)}`
+                : sheetSync.message}
+            </small>
+          </span>
+          <button disabled={sheetSync.status === "connecting"} onClick={() => void syncApplicationsFromSheet(true)}>
+            {sheetSync.status === "connecting" ? "Checking…" : "Sync now"}
+          </button>
+        </div>
         {applications.some((item) => item.demo) && <div className="demo-banner"><span><b>Demo records are showing.</b> They are safe placeholders and never leave this browser.</span><button onClick={() => setApplications((items) => items.filter((item) => !item.demo))}>Remove demos</button></div>}
         <section className="toolbar">
           <label className="search-field"><span>⌕</span><input value={applicationSearch} onChange={(event) => setApplicationSearch(event.target.value)} placeholder="Search company, role, location…" /></label>
@@ -585,12 +708,12 @@ export default function JobHub() {
           <span className="result-count">{filteredApplications.length} role{filteredApplications.length === 1 ? "" : "s"}</span>
         </section>
         <section className="application-list" aria-label="Applications">
-          <div className="application-header"><span>Company / Role</span><span>Status</span><span>Follow-up</span><span>Compensation</span><span>Priority</span><span /></div>
+          <div className="application-header"><span>Company / Role</span><span>Status</span><span>Next move</span><span>Compensation</span><span>Priority</span><span /></div>
           {filteredApplications.map((application) => (
             <article className="application-row" key={application.id}>
-              <div className="company-cell"><strong>{application.company}</strong><span>{application.role}</span><small>{application.location || "Location not set"}</small></div>
-              <div><span className={`status-pill status-${application.status.toLowerCase()}`}>{application.status}</span></div>
-              <div><strong className={application.followUpDate && application.followUpDate <= today ? "date-overdue" : ""}>{application.followUpDate ? formatHumanDate(application.followUpDate) : "Not set"}</strong><small>{application.appliedDate ? `Applied ${formatHumanDate(application.appliedDate)}` : application.source || ""}</small></div>
+              <div className="company-cell"><strong>{application.company}</strong><span>{application.role}</span><small>{application.location || "Location not set"}{application.sheetSynced ? " · Workbook" : ""}</small></div>
+              <div><span className={`status-pill status-${application.status.toLowerCase()}`}>{application.workbookStatus || application.status}</span><small>{application.currentRound && application.currentRound !== application.workbookStatus ? application.currentRound : ""}</small></div>
+              <div><strong className={application.followUpDate && application.followUpDate <= today ? "date-overdue" : ""}>{application.followUpDate ? formatHumanDate(application.followUpDate) : application.nextAction || "Not set"}</strong><small>{application.appliedDate ? `${application.workbookStatus === "Prepared" ? "Prepared" : "Dated"} ${formatHumanDate(application.appliedDate)}` : application.latestEmailSubject || application.source || ""}</small></div>
               <div><strong>{application.salaryMin ? `${formatMoney(application.salaryMin)}${application.salaryMax ? `–${formatMoney(application.salaryMax).replace("$", "")}` : "+"}` : "Not listed"}</strong><small>{application.source}</small></div>
               <div><span className={`priority-pill priority-${application.priority.toLowerCase()}`}>{application.priority}</span></div>
               <button className="row-action" aria-label={`Edit ${application.company}`} onClick={() => setApplicationDraft(application)}>•••</button>
@@ -646,10 +769,11 @@ export default function JobHub() {
   function renderData() {
     return (
       <>
-        <section className="page-heading"><div><p className="eyebrow">Local data</p><h1>You own the record.</h1><p>Everything is saved in this browser. Export a backup before changing computers or clearing browser storage.</p></div></section>
+        <section className="page-heading"><div><p className="eyebrow">Local data</p><h1>You own the record.</h1><p>Applications come from the project workbook. Coding progress, journals, and manually added roles stay in this browser.</p></div></section>
         <section className="data-grid">
           <article className="data-card featured"><div className="data-icon">↓</div><div><h2>Export a backup</h2><p>Download applications, coding progress, journals, and settings as one JSON file.</p><button className="primary-button" onClick={exportBackup}>Download backup</button></div></article>
           <article className="data-card"><div className="data-icon">↑</div><div><h2>Import data</h2><p>Restore a Job Hub JSON backup, or import an Applications CSV from your spreadsheet.</p><button className="secondary-button" onClick={() => fileInputRef.current?.click()}>Choose JSON or CSV</button></div></article>
+          <article className="data-card"><div className="data-icon">↻</div><div><h2>Workbook connection</h2><p>{sheetSync.status === "connected" ? `${sheetSync.rowCount} rows connected from ${sheetSync.workbook}.` : sheetSync.message}</p><button className="secondary-button" disabled={sheetSync.status === "connecting"} onClick={() => void syncApplicationsFromSheet(true)}>Sync applications now</button></div></article>
           <article className="data-card"><div className="data-icon">↺</div><div><h2>Restore demo</h2><p>Bring back three clearly labeled sample applications and reset the coding plan.</p><button className="secondary-button" onClick={resetDemo}>Restore demo data</button></div></article>
           <article className="data-card danger-card"><div className="data-icon">×</div><div><h2>Clear local data</h2><p>Remove all applications and prep journals saved in this browser. This cannot be undone.</p><button className="danger-button" onClick={clearAll}>Clear everything</button></div></article>
         </section>
@@ -670,7 +794,7 @@ export default function JobHub() {
           <button className={view === "prep" ? "active" : ""} onClick={() => setView("prep")}><span>03</span>Interview prep</button>
           <button className={view === "data" ? "active" : ""} onClick={() => setView("data")}><span>04</span>Data & backup</button>
         </nav>
-        <div className="sidebar-foot"><span className="local-dot" />Saved on this device<button onClick={exportBackup}>Export backup</button></div>
+        <div className="sidebar-foot"><span className={`local-dot ${sheetSync.status === "error" ? "has-error" : ""}`} />{sheetSync.status === "connected" ? "Workbook connected" : "Local workspace"}<button onClick={exportBackup}>Export backup</button></div>
       </aside>
       <main className="main-content">
         <header className="mobile-header"><div className="brand-mark"><span>JH</span><strong>Job Hub</strong></div><select value={view} onChange={(event) => setView(event.target.value as View)} aria-label="Choose page"><option value="overview">Overview</option><option value="applications">Applications</option><option value="prep">Interview prep</option><option value="data">Data & backup</option></select></header>
@@ -686,9 +810,10 @@ export default function JobHub() {
       {applicationDraft && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setApplicationDraft(null)}>
           <section className="modal-panel application-modal" role="dialog" aria-modal="true" aria-labelledby="application-title">
-            <div className="modal-header"><div><p className="eyebrow">Application record</p><h2 id="application-title">{applicationDraft.id ? "Edit application" : "Add application"}</h2></div><button className="close-button" onClick={() => setApplicationDraft(null)} aria-label="Close">×</button></div>
+            <div className="modal-header"><div><p className="eyebrow">Application record</p><h2 id="application-title">{applicationDraft.sheetSynced ? "Application details" : applicationDraft.id ? "Edit application" : "Add application"}</h2></div><button className="close-button" onClick={() => setApplicationDraft(null)} aria-label="Close">×</button></div>
             <form onSubmit={saveApplication}>
-              <div className="form-grid">
+              {applicationDraft.sheetSynced && <div className="sheet-record-note"><b>Synced from the project workbook.</b><span>{applicationDraft.nextAction ? `Next action: ${applicationDraft.nextAction}` : "No next action is set."}{applicationDraft.latestEmailSubject ? ` · Latest email: ${applicationDraft.latestEmailSubject}` : ""}</span><span>Update this record in Excel; Job Hub will pull the change automatically.</span></div>}
+              <fieldset className="form-grid" disabled={applicationDraft.sheetSynced}>
                 <label>Company<input required autoFocus value={applicationDraft.company} onChange={(event) => setApplicationDraft({ ...applicationDraft, company: event.target.value })} /></label>
                 <label>Role<input required value={applicationDraft.role} onChange={(event) => setApplicationDraft({ ...applicationDraft, role: event.target.value })} /></label>
                 <label>Location<input value={applicationDraft.location} onChange={(event) => setApplicationDraft({ ...applicationDraft, location: event.target.value })} /></label>
@@ -701,8 +826,13 @@ export default function JobHub() {
                 <label>Priority<select value={applicationDraft.priority} onChange={(event) => setApplicationDraft({ ...applicationDraft, priority: event.target.value as Application["priority"] })}><option>High</option><option>Medium</option><option>Low</option></select></label>
                 <label className="form-wide">Job URL<input type="url" placeholder="https://" value={applicationDraft.link} onChange={(event) => setApplicationDraft({ ...applicationDraft, link: event.target.value })} /></label>
                 <label className="form-wide">Next action / notes<textarea rows={4} value={applicationDraft.notes} onChange={(event) => setApplicationDraft({ ...applicationDraft, notes: event.target.value })} /></label>
+              </fieldset>
+              <div className="modal-actions">
+                {!applicationDraft.sheetSynced && applicationDraft.id && <button type="button" className="danger-link" onClick={() => deleteApplication(applicationDraft)}>Delete</button>}
+                <span />
+                <button type="button" className="secondary-button" onClick={() => setApplicationDraft(null)}>{applicationDraft.sheetSynced ? "Close" : "Cancel"}</button>
+                {!applicationDraft.sheetSynced && <button className="primary-button" type="submit">Save application</button>}
               </div>
-              <div className="modal-actions">{applicationDraft.id && <button type="button" className="danger-link" onClick={() => deleteApplication(applicationDraft)}>Delete</button>}<span /><button type="button" className="secondary-button" onClick={() => setApplicationDraft(null)}>Cancel</button><button className="primary-button" type="submit">Save application</button></div>
             </form>
           </section>
         </div>
