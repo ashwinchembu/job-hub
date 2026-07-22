@@ -1,0 +1,732 @@
+"use client";
+
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { interviewPlan, InterviewProblem, weekThemes } from "./data";
+
+type View = "overview" | "applications" | "prep" | "data";
+type ApplicationStatus =
+  | "Saved"
+  | "Preparing"
+  | "Applied"
+  | "Interviewing"
+  | "Offer"
+  | "Rejected"
+  | "Closed";
+type PrepStatus = "Not Started" | "Attempted" | "Solved with Hint" | "Solved Independently";
+
+type Application = {
+  id: string;
+  company: string;
+  role: string;
+  location: string;
+  status: ApplicationStatus;
+  appliedDate: string;
+  followUpDate: string;
+  salaryMin: string;
+  salaryMax: string;
+  source: string;
+  link: string;
+  priority: "High" | "Medium" | "Low";
+  notes: string;
+  demo?: boolean;
+};
+
+type ProblemProgress = {
+  status: PrepStatus;
+  confidence: number;
+  minutes: number;
+  naiveApproach: string;
+  invariant: string;
+  solutionSteps: string;
+  complexity: string;
+  edgeCases: string;
+  mistakes: string;
+  explanation: string;
+  lastAttempt: string;
+};
+
+type Settings = {
+  startDate: string;
+  primaryLanguage: string;
+  weeklyGoal: number;
+};
+
+const APPLICATIONS_KEY = "job-hub:applications:v1";
+const PROGRESS_KEY = "job-hub:problem-progress:v1";
+const SETTINGS_KEY = "job-hub:settings:v1";
+
+const applicationStatuses: ApplicationStatus[] = [
+  "Saved",
+  "Preparing",
+  "Applied",
+  "Interviewing",
+  "Offer",
+  "Rejected",
+  "Closed",
+];
+
+const emptyProgress: ProblemProgress = {
+  status: "Not Started",
+  confidence: 0,
+  minutes: 0,
+  naiveApproach: "",
+  invariant: "",
+  solutionSteps: "",
+  complexity: "",
+  edgeCases: "",
+  mistakes: "",
+  explanation: "",
+  lastAttempt: "",
+};
+
+function pad(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function toISODate(date = new Date()) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function addDays(dateString: string, days: number) {
+  const date = new Date(`${dateString}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return toISODate(date);
+}
+
+function dayDifference(start: string, end: string) {
+  const startDate = new Date(`${start}T12:00:00`).getTime();
+  const endDate = new Date(`${end}T12:00:00`).getTime();
+  return Math.floor((endDate - startDate) / 86_400_000);
+}
+
+function formatHumanDate(dateString: string) {
+  if (!dateString) return "Not set";
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(
+    new Date(`${dateString}T12:00:00`),
+  );
+}
+
+function formatMoney(value: string) {
+  const number = Number(value);
+  if (!number) return "";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(number);
+}
+
+function makeDemoApplications(today: string): Application[] {
+  return [
+    {
+      id: "demo-product",
+      company: "Example AI Studio",
+      role: "Product Engineer",
+      location: "San Francisco, CA",
+      status: "Applied",
+      appliedDate: addDays(today, -3),
+      followUpDate: addDays(today, 4),
+      salaryMin: "150000",
+      salaryMax: "205000",
+      source: "Company careers",
+      link: "",
+      priority: "High",
+      notes: "Demo record — replace this with one of your real applications.",
+      demo: true,
+    },
+    {
+      id: "demo-backend",
+      company: "Example Platform Co.",
+      role: "Backend Engineer",
+      location: "Remote",
+      status: "Interviewing",
+      appliedDate: addDays(today, -8),
+      followUpDate: addDays(today, 1),
+      salaryMin: "145000",
+      salaryMax: "190000",
+      source: "Referral",
+      link: "",
+      priority: "High",
+      notes: "Demo record — technical screen preparation is the next action.",
+      demo: true,
+    },
+    {
+      id: "demo-solutions",
+      company: "Example Data Systems",
+      role: "Solutions Engineer",
+      location: "Bay Area",
+      status: "Saved",
+      appliedDate: "",
+      followUpDate: addDays(today, 2),
+      salaryMin: "140000",
+      salaryMax: "185000",
+      source: "Job board",
+      link: "",
+      priority: "Medium",
+      notes: "Demo record — review the description and decide whether to apply.",
+      demo: true,
+    },
+  ];
+}
+
+function emptyApplication(today: string): Application {
+  return {
+    id: "",
+    company: "",
+    role: "",
+    location: "San Francisco, CA",
+    status: "Saved",
+    appliedDate: "",
+    followUpDate: addDays(today, 5),
+    salaryMin: "",
+    salaryMax: "",
+    source: "",
+    link: "",
+    priority: "High",
+    notes: "",
+  };
+}
+
+function parseCSV(text: string) {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+    if (char === '"' && quoted && next === '"') {
+      cell += '"';
+      index += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === "," && !quoted) {
+      row.push(cell.trim());
+      cell = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(cell.trim());
+      if (row.some(Boolean)) rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+  row.push(cell.trim());
+  if (row.some(Boolean)) rows.push(row);
+  return rows;
+}
+
+function normalizeStatus(value: string): ApplicationStatus {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("interview")) return "Interviewing";
+  if (normalized.includes("offer")) return "Offer";
+  if (normalized.includes("reject")) return "Rejected";
+  if (normalized.includes("closed") || normalized.includes("exclude")) return "Closed";
+  if (normalized.includes("prepar") || normalized.includes("block")) return "Preparing";
+  if (normalized.includes("submit") || normalized.includes("appl")) return "Applied";
+  return "Saved";
+}
+
+function formatTimer(seconds: number) {
+  return `${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}`;
+}
+
+export default function JobHub() {
+  const today = toISODate();
+  const [view, setView] = useState<View>("overview");
+  const [ready, setReady] = useState(false);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [progress, setProgress] = useState<Record<string, ProblemProgress>>({});
+  const [settings, setSettings] = useState<Settings>({ startDate: today, primaryLanguage: "Python", weeklyGoal: 7 });
+  const [applicationDraft, setApplicationDraft] = useState<Application | null>(null);
+  const [selectedProblem, setSelectedProblem] = useState<InterviewProblem | null>(null);
+  const [problemDraft, setProblemDraft] = useState<ProblemProgress>(emptyProgress);
+  const [applicationSearch, setApplicationSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"All" | ApplicationStatus>("All");
+  const [prepWeek, setPrepWeek] = useState(1);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerProblemId, setTimerProblemId] = useState<number | null>(null);
+  const [toast, setToast] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const localToday = toISODate();
+      const storedApplications = localStorage.getItem(APPLICATIONS_KEY);
+      const storedProgress = localStorage.getItem(PROGRESS_KEY);
+      const storedSettings = localStorage.getItem(SETTINGS_KEY);
+      setApplications(storedApplications ? JSON.parse(storedApplications) : makeDemoApplications(localToday));
+      setProgress(storedProgress ? JSON.parse(storedProgress) : {});
+      if (storedSettings) setSettings(JSON.parse(storedSettings));
+      setReady(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    localStorage.setItem(APPLICATIONS_KEY, JSON.stringify(applications));
+  }, [applications, ready]);
+
+  useEffect(() => {
+    if (!ready) return;
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+  }, [progress, ready]);
+
+  useEffect(() => {
+    if (!ready) return;
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }, [settings, ready]);
+
+  useEffect(() => {
+    if (!timerRunning) return;
+    const interval = window.setInterval(() => setTimerSeconds((value) => value + 1), 1000);
+    return () => window.clearInterval(interval);
+  }, [timerRunning]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(""), 2600);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
+
+  const planDayIndex = Math.max(0, Math.min(83, dayDifference(settings.startDate, today)));
+  const todayProblem = interviewPlan[planDayIndex];
+  const currentWeek = todayProblem.week;
+
+  const filteredApplications = useMemo(() => {
+    const query = applicationSearch.toLowerCase().trim();
+    return applications.filter((application) => {
+      const matchesStatus = statusFilter === "All" || application.status === statusFilter;
+      const matchesQuery =
+        !query ||
+        `${application.company} ${application.role} ${application.location} ${application.notes}`.toLowerCase().includes(query);
+      return matchesStatus && matchesQuery;
+    });
+  }, [applicationSearch, applications, statusFilter]);
+
+  const dueApplications = useMemo(
+    () =>
+      applications
+        .filter(
+          (application) =>
+            application.followUpDate &&
+            application.followUpDate <= today &&
+            !["Rejected", "Closed", "Offer"].includes(application.status),
+        )
+        .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate)),
+    [applications, today],
+  );
+
+  const solvedCount = Object.values(progress).filter((item) =>
+    ["Solved with Hint", "Solved Independently"].includes(item.status),
+  ).length;
+  const totalPrepMinutes = Object.values(progress).reduce((sum, item) => sum + (item.minutes || 0), 0);
+  const interviewCount = applications.filter((item) => item.status === "Interviewing").length;
+  const appliedCount = applications.filter((item) => ["Applied", "Interviewing", "Offer"].includes(item.status)).length;
+  const offerCount = applications.filter((item) => item.status === "Offer").length;
+  const activeApplications = applications.filter((item) => !["Rejected", "Closed"].includes(item.status));
+
+  function showToast(message: string) {
+    setToast(message);
+  }
+
+  function openNewApplication() {
+    setApplicationDraft(emptyApplication(today));
+  }
+
+  function saveApplication(event: FormEvent) {
+    event.preventDefault();
+    if (!applicationDraft?.company.trim() || !applicationDraft.role.trim()) return;
+    const saved = { ...applicationDraft, id: applicationDraft.id || crypto.randomUUID(), demo: false };
+    setApplications((items) => {
+      const exists = items.some((item) => item.id === saved.id);
+      return exists ? items.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...items];
+    });
+    setApplicationDraft(null);
+    showToast(applicationDraft.id ? "Application updated" : "Application added");
+  }
+
+  function deleteApplication(application: Application) {
+    if (!window.confirm(`Delete ${application.company} — ${application.role}?`)) return;
+    setApplications((items) => items.filter((item) => item.id !== application.id));
+    setApplicationDraft(null);
+    showToast("Application deleted");
+  }
+
+  function openProblem(problem: InterviewProblem) {
+    setSelectedProblem(problem);
+    setProblemDraft(progress[String(problem.id)] ?? emptyProgress);
+  }
+
+  function saveProblemJournal() {
+    if (!selectedProblem) return;
+    setProgress((items) => ({ ...items, [String(selectedProblem.id)]: problemDraft }));
+    setSelectedProblem(null);
+    showToast("Problem journal saved");
+  }
+
+  function quickUpdateProblem(problem: InterviewProblem, status: PrepStatus) {
+    setProgress((items) => ({
+      ...items,
+      [String(problem.id)]: {
+        ...(items[String(problem.id)] ?? emptyProgress),
+        status,
+        lastAttempt: status === "Not Started" ? "" : today,
+      },
+    }));
+  }
+
+  function startTimer(problem: InterviewProblem) {
+    if (timerProblemId !== problem.id) setTimerSeconds(0);
+    setTimerProblemId(problem.id);
+    setTimerRunning(true);
+  }
+
+  function stopTimer() {
+    setTimerRunning(false);
+    if (!timerProblemId || timerSeconds < 1) return;
+    const minutes = Math.max(1, Math.ceil(timerSeconds / 60));
+    setProgress((items) => ({
+      ...items,
+      [String(timerProblemId)]: {
+        ...(items[String(timerProblemId)] ?? emptyProgress),
+        minutes: (items[String(timerProblemId)]?.minutes ?? 0) + minutes,
+        status: items[String(timerProblemId)]?.status === "Solved Independently" ? "Solved Independently" : "Attempted",
+        lastAttempt: today,
+      },
+    }));
+    setTimerSeconds(0);
+    showToast(`${minutes} practice minute${minutes === 1 ? "" : "s"} saved`);
+  }
+
+  function exportBackup() {
+    const data = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      applications,
+      progress,
+      settings,
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `job-hub-backup-${today}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    showToast("Backup exported");
+  }
+
+  async function importFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    try {
+      if (file.name.toLowerCase().endsWith(".json")) {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed.applications)) setApplications(parsed.applications);
+        if (parsed.progress && typeof parsed.progress === "object") setProgress(parsed.progress);
+        if (parsed.settings && typeof parsed.settings === "object") setSettings(parsed.settings);
+        showToast("Backup imported");
+      } else {
+        const rows = parseCSV(text);
+        const headers = rows[0].map((header) => header.toLowerCase().replace(/[^a-z0-9]/g, ""));
+        const value = (row: string[], names: string[]) => {
+          const index = headers.findIndex((header) => names.includes(header));
+          return index >= 0 ? row[index] ?? "" : "";
+        };
+        const imported = rows.slice(1).map((row) => ({
+          id: crypto.randomUUID(),
+          company: value(row, ["company"]),
+          role: value(row, ["role", "title"]),
+          location: value(row, ["location"]),
+          status: normalizeStatus(value(row, ["status", "currentround"])),
+          appliedDate: value(row, ["applicationprepdate", "applicationdate", "date"]),
+          followUpDate: "",
+          salaryMin: value(row, ["minbase", "salarymin"]),
+          salaryMax: value(row, ["maxbase", "salarymax"]),
+          source: value(row, ["source"]),
+          link: value(row, ["joburl", "link", "url"]),
+          priority: "High" as const,
+          notes: value(row, ["notes", "nextaction"]),
+          demo: false,
+        })).filter((item) => item.company && item.role);
+        setApplications((items) => [...imported, ...items.filter((item) => !item.demo)]);
+        showToast(`${imported.length} applications imported`);
+      }
+    } catch {
+      showToast("That file could not be imported");
+    }
+    event.target.value = "";
+  }
+
+  function resetDemo() {
+    if (!window.confirm("Replace current application records and prep progress with fresh demo data?")) return;
+    setApplications(makeDemoApplications(today));
+    setProgress({});
+    setSettings({ startDate: today, primaryLanguage: "Python", weeklyGoal: 7 });
+    showToast("Demo data restored");
+  }
+
+  function clearAll() {
+    if (!window.confirm("Delete all local Job Hub data from this browser? Export a backup first if you need one.")) return;
+    setApplications([]);
+    setProgress({});
+    showToast("Local data cleared");
+  }
+
+  function renderOverview() {
+    const todayProgress = progress[String(todayProblem.id)] ?? emptyProgress;
+    const nextFollowUps = applications
+      .filter((application) => application.followUpDate && !["Rejected", "Closed"].includes(application.status))
+      .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate))
+      .slice(0, 4);
+
+    return (
+      <>
+        <section className="welcome-row">
+          <div>
+            <p className="eyebrow">{new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric" }).format(new Date())}</p>
+            <h1>Your search, in one place.</h1>
+            <p className="welcome-copy">Move applications forward, protect follow-up dates, and keep technical prep attached to the roles you want.</p>
+          </div>
+          <button className="primary-button" onClick={openNewApplication}>+ Add application</button>
+        </section>
+
+        <section className="metric-grid" aria-label="Job search summary">
+          <article className="metric-card"><span>Active pipeline</span><strong>{activeApplications.length}</strong><small>{appliedCount} applied or beyond</small></article>
+          <article className="metric-card"><span>Interviews</span><strong>{interviewCount}</strong><small>{offerCount} offers</small></article>
+          <article className={`metric-card ${dueApplications.length ? "metric-alert" : ""}`}><span>Follow-ups due</span><strong>{dueApplications.length}</strong><small>{dueApplications.length ? "Needs attention today" : "You are caught up"}</small></article>
+          <article className="metric-card"><span>Prep complete</span><strong>{solvedCount}<em>/84</em></strong><small>{totalPrepMinutes} minutes logged</small></article>
+        </section>
+
+        <section className="overview-grid">
+          <article className="focus-card">
+            <div className="card-heading-row">
+              <div><p className="eyebrow">Today · Day {todayProblem.day}</p><h2>{todayProblem.title}</h2></div>
+              <span className={`difficulty difficulty-${todayProblem.difficulty.toLowerCase()}`}>{todayProblem.difficulty}</span>
+            </div>
+            <p className="pattern-label">{todayProblem.pattern}</p>
+            <p className="focus-cue">“{todayProblem.cue}”</p>
+            <div className="focus-meta">
+              <span><b>{todayProblem.targetMinutes}</b> min target</span>
+              <span><b>{settings.primaryLanguage}</b> language</span>
+              <span><b>{todayProgress.minutes}</b> min logged</span>
+            </div>
+            <div className="timer-panel">
+              <div><span>Session timer</span><strong>{timerProblemId === todayProblem.id ? formatTimer(timerSeconds) : "00:00"}</strong></div>
+              <div className="button-row">
+                {!timerRunning || timerProblemId !== todayProblem.id ? (
+                  <button className="secondary-button" onClick={() => startTimer(todayProblem)}>Start timer</button>
+                ) : (
+                  <button className="secondary-button danger-outline" onClick={stopTimer}>Stop & save</button>
+                )}
+                <button className="text-button" onClick={() => openProblem(todayProblem)}>Open journal →</button>
+              </div>
+            </div>
+            <a className="leetcode-link" href={todayProblem.url} target="_blank" rel="noreferrer">Open problem on LeetCode ↗</a>
+          </article>
+
+          <article className="pipeline-card">
+            <div className="card-heading-row"><div><p className="eyebrow">Momentum</p><h2>Pipeline pulse</h2></div><button className="text-button" onClick={() => setView("applications")}>View all →</button></div>
+            <div className="pipeline-track" aria-label="Application stages">
+              {(["Saved", "Preparing", "Applied", "Interviewing", "Offer"] as ApplicationStatus[]).map((status) => {
+                const count = applications.filter((item) => item.status === status).length;
+                return <div key={status} className={`pipeline-segment stage-${status.toLowerCase()}`} style={{ flex: Math.max(1, count) }} title={`${status}: ${count}`} />;
+              })}
+            </div>
+            <div className="stage-list">
+              {(["Saved", "Preparing", "Applied", "Interviewing", "Offer"] as ApplicationStatus[]).map((status) => (
+                <div key={status}><span className={`stage-dot stage-${status.toLowerCase()}`} /> <span>{status}</span><strong>{applications.filter((item) => item.status === status).length}</strong></div>
+              ))}
+            </div>
+          </article>
+        </section>
+
+        <section className="lower-grid">
+          <article className="list-card">
+            <div className="card-heading-row"><div><p className="eyebrow">Next moves</p><h2>Follow-up queue</h2></div></div>
+            {nextFollowUps.length ? nextFollowUps.map((application) => (
+              <button className="followup-row" key={application.id} onClick={() => setApplicationDraft(application)}>
+                <span className={`priority-marker priority-${application.priority.toLowerCase()}`} />
+                <span className="followup-main"><strong>{application.company}</strong><small>{application.role}</small></span>
+                <span className={application.followUpDate <= today ? "date-overdue" : ""}>{application.followUpDate <= today ? "Due " : ""}{formatHumanDate(application.followUpDate)}</span>
+              </button>
+            )) : <div className="empty-state compact"><strong>No follow-ups scheduled</strong><span>Add a follow-up date to an application to see it here.</span></div>}
+          </article>
+
+          <article className="list-card">
+            <div className="card-heading-row"><div><p className="eyebrow">Week {currentWeek}</p><h2>{weekThemes[currentWeek - 1]}</h2></div><button className="text-button" onClick={() => setView("prep")}>Full plan →</button></div>
+            <div className="week-progress-row"><div><span style={{ width: `${Math.min(100, (interviewPlan.filter((problem) => problem.week === currentWeek && ["Solved with Hint", "Solved Independently"].includes(progress[String(problem.id)]?.status)).length / 7) * 100)}%` }} /></div><strong>{interviewPlan.filter((problem) => problem.week === currentWeek && ["Solved with Hint", "Solved Independently"].includes(progress[String(problem.id)]?.status)).length}/7</strong></div>
+            {interviewPlan.filter((problem) => problem.week === currentWeek).slice(0, 4).map((problem) => (
+              <button className="mini-problem-row" key={problem.id} onClick={() => openProblem(problem)}>
+                <span className={`problem-check ${progress[String(problem.id)]?.status?.startsWith("Solved") ? "is-complete" : ""}`}>{progress[String(problem.id)]?.status?.startsWith("Solved") ? "✓" : problem.day}</span>
+                <span><strong>{problem.title}</strong><small>{problem.pattern}</small></span>
+                <span>{progress[String(problem.id)]?.status ?? "Not Started"}</span>
+              </button>
+            ))}
+          </article>
+        </section>
+      </>
+    );
+  }
+
+  function renderApplications() {
+    return (
+      <>
+        <section className="page-heading">
+          <div><p className="eyebrow">Application pipeline</p><h1>Every role. One next move.</h1><p>Track status, compensation, follow-ups, links, and the note that matters most.</p></div>
+          <button className="primary-button" onClick={openNewApplication}>+ Add application</button>
+        </section>
+        {applications.some((item) => item.demo) && <div className="demo-banner"><span><b>Demo records are showing.</b> They are safe placeholders and never leave this browser.</span><button onClick={() => setApplications((items) => items.filter((item) => !item.demo))}>Remove demos</button></div>}
+        <section className="toolbar">
+          <label className="search-field"><span>⌕</span><input value={applicationSearch} onChange={(event) => setApplicationSearch(event.target.value)} placeholder="Search company, role, location…" /></label>
+          <label className="select-field">Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "All" | ApplicationStatus)}><option>All</option>{applicationStatuses.map((status) => <option key={status}>{status}</option>)}</select></label>
+          <span className="result-count">{filteredApplications.length} role{filteredApplications.length === 1 ? "" : "s"}</span>
+        </section>
+        <section className="application-list" aria-label="Applications">
+          <div className="application-header"><span>Company / Role</span><span>Status</span><span>Follow-up</span><span>Compensation</span><span>Priority</span><span /></div>
+          {filteredApplications.map((application) => (
+            <article className="application-row" key={application.id}>
+              <div className="company-cell"><strong>{application.company}</strong><span>{application.role}</span><small>{application.location || "Location not set"}</small></div>
+              <div><span className={`status-pill status-${application.status.toLowerCase()}`}>{application.status}</span></div>
+              <div><strong className={application.followUpDate && application.followUpDate <= today ? "date-overdue" : ""}>{application.followUpDate ? formatHumanDate(application.followUpDate) : "Not set"}</strong><small>{application.appliedDate ? `Applied ${formatHumanDate(application.appliedDate)}` : application.source || ""}</small></div>
+              <div><strong>{application.salaryMin ? `${formatMoney(application.salaryMin)}${application.salaryMax ? `–${formatMoney(application.salaryMax).replace("$", "")}` : "+"}` : "Not listed"}</strong><small>{application.source}</small></div>
+              <div><span className={`priority-pill priority-${application.priority.toLowerCase()}`}>{application.priority}</span></div>
+              <button className="row-action" aria-label={`Edit ${application.company}`} onClick={() => setApplicationDraft(application)}>•••</button>
+            </article>
+          ))}
+          {!filteredApplications.length && <div className="empty-state"><strong>No applications match this view.</strong><span>Clear the filters or add your first role.</span><button className="secondary-button" onClick={openNewApplication}>Add application</button></div>}
+        </section>
+      </>
+    );
+  }
+
+  function renderPrep() {
+    const weekProblems = interviewPlan.filter((problem) => problem.week === prepWeek);
+    const completedInWeek = weekProblems.filter((problem) => ["Solved with Hint", "Solved Independently"].includes(progress[String(problem.id)]?.status)).length;
+    return (
+      <>
+        <section className="page-heading prep-heading">
+          <div><p className="eyebrow">84-day interview plan</p><h1>Practice with a reason.</h1><p>Each problem is tied to the full-stack, backend, AI/data, and forward-deployed work in your target roles.</p></div>
+          <div className="prep-summary"><strong>{solvedCount}/84</strong><span>problems complete</span><small>{totalPrepMinutes} minutes logged</small></div>
+        </section>
+        <section className="prep-controls">
+          <label>Plan start<input type="date" value={settings.startDate} onChange={(event) => setSettings({ ...settings, startDate: event.target.value })} /></label>
+          <label>Primary language<select value={settings.primaryLanguage} onChange={(event) => setSettings({ ...settings, primaryLanguage: event.target.value })}><option>Python</option><option>TypeScript</option><option>Java</option><option>C++</option></select></label>
+          <div className="privacy-note">Notes and progress stay on this device.</div>
+        </section>
+        <div className="week-tabs" role="tablist" aria-label="Interview plan weeks">
+          {weekThemes.map((theme, index) => <button key={theme} className={prepWeek === index + 1 ? "active" : ""} onClick={() => setPrepWeek(index + 1)}>W{index + 1}</button>)}
+        </div>
+        <section className="week-hero">
+          <div><p className="eyebrow">Week {prepWeek}</p><h2>{weekThemes[prepWeek - 1]}</h2><p>{prepWeek <= 2 ? "Build fast recognition and clean loop invariants." : prepWeek <= 6 ? "Strengthen traversal, state, and boundary reasoning." : prepWeek <= 9 ? "Model connected systems, priority, and dependencies." : "Turn patterns into interview-ready explanations."}</p></div>
+          <div className="week-ring" style={{ "--progress": `${(completedInWeek / 7) * 360}deg` } as React.CSSProperties}><span><strong>{completedInWeek}</strong>/7</span></div>
+        </section>
+        <section className="problem-list">
+          {weekProblems.map((problem) => {
+            const item = progress[String(problem.id)] ?? emptyProgress;
+            const scheduledDate = addDays(settings.startDate, problem.day - 1);
+            return (
+              <article className={`problem-row ${problem.id === todayProblem.id ? "is-today" : ""}`} key={problem.id}>
+                <div className={`problem-number ${item.status.startsWith("Solved") ? "complete" : ""}`}>{item.status.startsWith("Solved") ? "✓" : problem.day}</div>
+                <div className="problem-info"><div><strong>{problem.title}</strong>{problem.id === todayProblem.id && <span className="today-badge">Today</span>}</div><small>{problem.pattern} · {formatHumanDate(scheduledDate)}</small><p>{problem.cue}</p></div>
+                <span className={`difficulty difficulty-${problem.difficulty.toLowerCase()}`}>{problem.difficulty}</span>
+                <span className="target-time">{problem.targetMinutes} min</span>
+                <select aria-label={`${problem.title} status`} value={item.status} onChange={(event) => quickUpdateProblem(problem, event.target.value as PrepStatus)}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select>
+                <button className="journal-button" onClick={() => openProblem(problem)}>Journal</button>
+              </article>
+            );
+          })}
+        </section>
+      </>
+    );
+  }
+
+  function renderData() {
+    return (
+      <>
+        <section className="page-heading"><div><p className="eyebrow">Local data</p><h1>You own the record.</h1><p>Everything is saved in this browser. Export a backup before changing computers or clearing browser storage.</p></div></section>
+        <section className="data-grid">
+          <article className="data-card featured"><div className="data-icon">↓</div><div><h2>Export a backup</h2><p>Download applications, coding progress, journals, and settings as one JSON file.</p><button className="primary-button" onClick={exportBackup}>Download backup</button></div></article>
+          <article className="data-card"><div className="data-icon">↑</div><div><h2>Import data</h2><p>Restore a Job Hub JSON backup, or import an Applications CSV from your spreadsheet.</p><button className="secondary-button" onClick={() => fileInputRef.current?.click()}>Choose JSON or CSV</button></div></article>
+          <article className="data-card"><div className="data-icon">↺</div><div><h2>Restore demo</h2><p>Bring back three clearly labeled sample applications and reset the coding plan.</p><button className="secondary-button" onClick={resetDemo}>Restore demo data</button></div></article>
+          <article className="data-card danger-card"><div className="data-icon">×</div><div><h2>Clear local data</h2><p>Remove all applications and prep journals saved in this browser. This cannot be undone.</p><button className="danger-button" onClick={clearAll}>Clear everything</button></div></article>
+        </section>
+        <section className="import-guide"><p className="eyebrow">CSV import columns</p><h2>Works with a simple application export.</h2><p>Job Hub recognizes columns such as <code>Company</code>, <code>Role</code>, <code>Location</code>, <code>Status</code>, <code>Application Date</code>, <code>Min Base</code>, <code>Max Base</code>, <code>Source</code>, <code>Job URL</code>, and <code>Notes</code>.</p></section>
+      </>
+    );
+  }
+
+  if (!ready) return <div className="app-loading">Opening Job Hub…</div>;
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand-mark"><span>JH</span><div><strong>Job Hub</strong><small>Local workspace</small></div></div>
+        <nav aria-label="Main navigation">
+          <button className={view === "overview" ? "active" : ""} onClick={() => setView("overview")}><span>01</span>Overview</button>
+          <button className={view === "applications" ? "active" : ""} onClick={() => setView("applications")}><span>02</span>Applications</button>
+          <button className={view === "prep" ? "active" : ""} onClick={() => setView("prep")}><span>03</span>Interview prep</button>
+          <button className={view === "data" ? "active" : ""} onClick={() => setView("data")}><span>04</span>Data & backup</button>
+        </nav>
+        <div className="sidebar-foot"><span className="local-dot" />Saved on this device<button onClick={exportBackup}>Export backup</button></div>
+      </aside>
+      <main className="main-content">
+        <header className="mobile-header"><div className="brand-mark"><span>JH</span><strong>Job Hub</strong></div><select value={view} onChange={(event) => setView(event.target.value as View)} aria-label="Choose page"><option value="overview">Overview</option><option value="applications">Applications</option><option value="prep">Interview prep</option><option value="data">Data & backup</option></select></header>
+        {view === "overview" && renderOverview()}
+        {view === "applications" && renderApplications()}
+        {view === "prep" && renderPrep()}
+        {view === "data" && renderData()}
+      </main>
+
+      <input ref={fileInputRef} className="hidden-input" type="file" accept=".json,.csv,text/csv,application/json" onChange={importFile} />
+      {toast && <div className="toast" role="status">{toast}</div>}
+
+      {applicationDraft && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setApplicationDraft(null)}>
+          <section className="modal-panel application-modal" role="dialog" aria-modal="true" aria-labelledby="application-title">
+            <div className="modal-header"><div><p className="eyebrow">Application record</p><h2 id="application-title">{applicationDraft.id ? "Edit application" : "Add application"}</h2></div><button className="close-button" onClick={() => setApplicationDraft(null)} aria-label="Close">×</button></div>
+            <form onSubmit={saveApplication}>
+              <div className="form-grid">
+                <label>Company<input required autoFocus value={applicationDraft.company} onChange={(event) => setApplicationDraft({ ...applicationDraft, company: event.target.value })} /></label>
+                <label>Role<input required value={applicationDraft.role} onChange={(event) => setApplicationDraft({ ...applicationDraft, role: event.target.value })} /></label>
+                <label>Location<input value={applicationDraft.location} onChange={(event) => setApplicationDraft({ ...applicationDraft, location: event.target.value })} /></label>
+                <label>Status<select value={applicationDraft.status} onChange={(event) => setApplicationDraft({ ...applicationDraft, status: event.target.value as ApplicationStatus })}>{applicationStatuses.map((status) => <option key={status}>{status}</option>)}</select></label>
+                <label>Applied date<input type="date" value={applicationDraft.appliedDate} onChange={(event) => setApplicationDraft({ ...applicationDraft, appliedDate: event.target.value })} /></label>
+                <label>Follow-up date<input type="date" value={applicationDraft.followUpDate} onChange={(event) => setApplicationDraft({ ...applicationDraft, followUpDate: event.target.value })} /></label>
+                <label>Minimum base<input type="number" placeholder="150000" value={applicationDraft.salaryMin} onChange={(event) => setApplicationDraft({ ...applicationDraft, salaryMin: event.target.value })} /></label>
+                <label>Maximum base<input type="number" placeholder="210000" value={applicationDraft.salaryMax} onChange={(event) => setApplicationDraft({ ...applicationDraft, salaryMax: event.target.value })} /></label>
+                <label>Source<input placeholder="Company careers, referral…" value={applicationDraft.source} onChange={(event) => setApplicationDraft({ ...applicationDraft, source: event.target.value })} /></label>
+                <label>Priority<select value={applicationDraft.priority} onChange={(event) => setApplicationDraft({ ...applicationDraft, priority: event.target.value as Application["priority"] })}><option>High</option><option>Medium</option><option>Low</option></select></label>
+                <label className="form-wide">Job URL<input type="url" placeholder="https://" value={applicationDraft.link} onChange={(event) => setApplicationDraft({ ...applicationDraft, link: event.target.value })} /></label>
+                <label className="form-wide">Next action / notes<textarea rows={4} value={applicationDraft.notes} onChange={(event) => setApplicationDraft({ ...applicationDraft, notes: event.target.value })} /></label>
+              </div>
+              <div className="modal-actions">{applicationDraft.id && <button type="button" className="danger-link" onClick={() => deleteApplication(applicationDraft)}>Delete</button>}<span /><button type="button" className="secondary-button" onClick={() => setApplicationDraft(null)}>Cancel</button><button className="primary-button" type="submit">Save application</button></div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {selectedProblem && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setSelectedProblem(null)}>
+          <section className="modal-panel journal-modal" role="dialog" aria-modal="true" aria-labelledby="journal-title">
+            <div className="modal-header"><div><p className="eyebrow">Day {selectedProblem.day} · Week {selectedProblem.week}</p><h2 id="journal-title">{selectedProblem.title}</h2><p>{selectedProblem.pattern} · {selectedProblem.targetMinutes} minute target</p></div><button className="close-button" onClick={() => setSelectedProblem(null)} aria-label="Close">×</button></div>
+            <div className="journal-callout"><strong>Recognition cue</strong><span>{selectedProblem.cue}</span><a href={selectedProblem.url} target="_blank" rel="noreferrer">Open LeetCode ↗</a></div>
+            <div className="journal-status-row"><label>Status<select value={problemDraft.status} onChange={(event) => setProblemDraft({ ...problemDraft, status: event.target.value as PrepStatus })}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select></label><label>Confidence<select value={problemDraft.confidence} onChange={(event) => setProblemDraft({ ...problemDraft, confidence: Number(event.target.value) })}><option value="0">Not rated</option><option value="1">1 — Cannot reproduce</option><option value="2">2 — Need notes</option><option value="3">3 — Mostly clear</option><option value="4">4 — Can re-code</option><option value="5">5 — Can explain cold</option></select></label><label>Minutes<input type="number" min="0" value={problemDraft.minutes} onChange={(event) => setProblemDraft({ ...problemDraft, minutes: Number(event.target.value) })} /></label></div>
+            <div className="journal-grid">
+              <label>My naive approach<textarea rows={4} value={problemDraft.naiveApproach} onChange={(event) => setProblemDraft({ ...problemDraft, naiveApproach: event.target.value })} placeholder="What would the brute-force solution do?" /></label>
+              <label>Key invariant / decision rule<textarea rows={4} value={problemDraft.invariant} onChange={(event) => setProblemDraft({ ...problemDraft, invariant: event.target.value })} placeholder="What stays true after every step?" /></label>
+              <label className="journal-wide">Optimal steps in plain English<textarea rows={5} value={problemDraft.solutionSteps} onChange={(event) => setProblemDraft({ ...problemDraft, solutionSteps: event.target.value })} placeholder="Explain the algorithm without code syntax." /></label>
+              <label>Complexity<textarea rows={3} value={problemDraft.complexity} onChange={(event) => setProblemDraft({ ...problemDraft, complexity: event.target.value })} placeholder="Time and space, with variables." /></label>
+              <label>Edge cases & tests<textarea rows={3} value={problemDraft.edgeCases} onChange={(event) => setProblemDraft({ ...problemDraft, edgeCases: event.target.value })} placeholder="Empty, duplicates, boundaries…" /></label>
+              <label>Mistakes / bug cause<textarea rows={3} value={problemDraft.mistakes} onChange={(event) => setProblemDraft({ ...problemDraft, mistakes: event.target.value })} placeholder="What went wrong and why?" /></label>
+              <label>60-second explanation<textarea rows={3} value={problemDraft.explanation} onChange={(event) => setProblemDraft({ ...problemDraft, explanation: event.target.value })} placeholder="Your interview-ready summary." /></label>
+            </div>
+            <div className="modal-actions"><span /><button className="secondary-button" onClick={() => setSelectedProblem(null)}>Cancel</button><button className="primary-button" onClick={saveProblemJournal}>Save journal</button></div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
