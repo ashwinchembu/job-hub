@@ -434,9 +434,11 @@ textarea:focus-visible {
 .difficulty {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 27px;
   padding: 5px 9px;
   border-radius: 999px;
+  text-align: center;
   font-family: var(--font-geist-mono), monospace;
   font-size: 10px;
   font-weight: 800;
@@ -1195,6 +1197,7 @@ textarea:focus-visible {
 
 .problem-info {
   min-width: 0;
+  text-align: left;
 }
 
 .problem-info > div {
@@ -1230,12 +1233,15 @@ textarea:focus-visible {
   color: var(--ink-soft);
   font-family: var(--font-geist-mono), monospace;
   font-size: 10px;
+  text-align: center;
 }
 
 .problem-row select {
   min-height: 38px;
   padding: 6px 8px;
   font-size: 10px;
+  text-align: center;
+  text-align-last: center;
 }
 
 .journal-button {
