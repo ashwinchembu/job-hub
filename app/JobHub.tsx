@@ -18,6 +18,17 @@ type ReviewVerdict = "Correct" | "Mostly correct" | "Incorrect" | "Needs more co
 type CodeReview = {
   verdict: ReviewVerdict;
   score: number;
+  scoreBreakdown?: {
+    codeCorrectness: number;
+    approachReasoning: number;
+    complexityAnalysis: number;
+    edgeCaseCoverage: number;
+    explanationQuality: number;
+  };
+  inputCoverage?: {
+    used: string[];
+    missing: string[];
+  };
   summary: string;
   correctness: string;
   complexity: {
@@ -42,6 +53,16 @@ type CodeReview = {
     improve: string;
     explanationOutline: string;
   };
+  explanationReview?: {
+    assessment: string;
+    accuratePoints: string[];
+    gaps: string[];
+    structureSuggestion: string;
+  };
+  hints?: Array<{
+    level: "Nudge" | "Direction" | "Targeted";
+    text: string;
+  }>;
   nextAction: string;
   sources: Array<{ title: string; url: string }>;
   reviewedAt: string;
@@ -136,6 +157,29 @@ const emptyProgress: ProblemProgress = {
   codeLanguage: "",
   codeReview: null,
 };
+
+function hasReviewableInput(item: ProblemProgress) {
+  return [
+    item.code,
+    item.naiveApproach,
+    item.invariant,
+    item.solutionSteps,
+    item.complexity,
+    item.edgeCases,
+    item.mistakes,
+    item.explanation,
+  ].some((value) => value.trim());
+}
+
+function scoreCategories(breakdown: NonNullable<CodeReview["scoreBreakdown"]>) {
+  return [
+    { label: "Code correctness", weight: "40%", score: breakdown.codeCorrectness },
+    { label: "Approach & reasoning", weight: "20%", score: breakdown.approachReasoning },
+    { label: "Complexity analysis", weight: "10%", score: breakdown.complexityAnalysis },
+    { label: "Edge-case coverage", weight: "10%", score: breakdown.edgeCaseCoverage },
+    { label: "Explanation quality", weight: "20%", score: breakdown.explanationQuality },
+  ];
+}
 
 function pad(value: number) {
   return String(value).padStart(2, "0");
@@ -509,8 +553,8 @@ export default function JobHub() {
 
   async function evaluateCode() {
     if (!selectedProblem || reviewRunning) return;
-    if (!problemDraft.code.trim()) {
-      setReviewError("Paste your solution code first.");
+    if (!hasReviewableInput(problemDraft)) {
+      setReviewError("Add your code or at least one journal explanation first.");
       return;
     }
 
@@ -526,6 +570,16 @@ export default function JobHub() {
           pattern: selectedProblem.pattern,
           language: problemDraft.codeLanguage || settings.primaryLanguage,
           code: problemDraft.code,
+          status: problemDraft.status,
+          confidence: problemDraft.confidence,
+          minutes: problemDraft.minutes,
+          naiveApproach: problemDraft.naiveApproach,
+          invariant: problemDraft.invariant,
+          solutionSteps: problemDraft.solutionSteps,
+          complexityClaim: problemDraft.complexity,
+          edgeCaseNotes: problemDraft.edgeCases,
+          mistakes: problemDraft.mistakes,
+          explanation: problemDraft.explanation,
         }),
       });
       const payload = await response.json();
@@ -533,10 +587,15 @@ export default function JobHub() {
         throw new Error(payload.error || "The AI review could not be completed.");
       }
 
-      const updated = { ...problemDraft, codeReview: payload.review as CodeReview };
+      const updated = {
+        ...problemDraft,
+        status: problemDraft.status === "Not Started" ? "Attempted" as const : problemDraft.status,
+        lastAttempt: today,
+        codeReview: payload.review as CodeReview,
+      };
       setProblemDraft(updated);
       setProgress((items) => ({ ...items, [String(selectedProblem.id)]: updated }));
-      showToast("AI code review saved");
+      showToast("AI code and explanation review saved");
     } catch (error) {
       setReviewError(error instanceof Error ? error.message : "The AI review could not be completed.");
     } finally {
@@ -928,28 +987,28 @@ export default function JobHub() {
           <section className="modal-panel journal-modal" role="dialog" aria-modal="true" aria-labelledby="journal-title">
             <div className="modal-header"><div><p className="eyebrow">Day {selectedProblem.day} · Week {selectedProblem.week}</p><h2 id="journal-title">{selectedProblem.title}</h2><p>{selectedProblem.pattern} · {selectedProblem.targetMinutes} minute target</p></div><button className="close-button" onClick={() => setSelectedProblem(null)} aria-label="Close">×</button></div>
             <div className="journal-callout"><strong>Recognition cue</strong><span>{selectedProblem.cue}</span><a href={selectedProblem.url} target="_blank" rel="noreferrer">Open LeetCode ↗</a></div>
-            <div className="journal-status-row"><label>Status<select value={problemDraft.status} onChange={(event) => setProblemDraft({ ...problemDraft, status: event.target.value as PrepStatus })}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select></label><label>Confidence<select value={problemDraft.confidence} onChange={(event) => setProblemDraft({ ...problemDraft, confidence: Number(event.target.value) })}><option value="0">Not rated</option><option value="1">1 — Cannot reproduce</option><option value="2">2 — Need notes</option><option value="3">3 — Mostly clear</option><option value="4">4 — Can re-code</option><option value="5">5 — Can explain cold</option></select></label><label>Minutes<input type="number" min="0" value={problemDraft.minutes} onChange={(event) => setProblemDraft({ ...problemDraft, minutes: Number(event.target.value) })} /></label></div>
+            <div className="journal-status-row"><label>Status<select value={problemDraft.status} onChange={(event) => setProblemDraft({ ...problemDraft, status: event.target.value as PrepStatus, codeReview: null })}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select></label><label>Confidence<select value={problemDraft.confidence} onChange={(event) => setProblemDraft({ ...problemDraft, confidence: Number(event.target.value), codeReview: null })}><option value="0">Not rated</option><option value="1">1 — Cannot reproduce</option><option value="2">2 — Need notes</option><option value="3">3 — Mostly clear</option><option value="4">4 — Can re-code</option><option value="5">5 — Can explain cold</option></select></label><label>Minutes<input type="number" min="0" value={problemDraft.minutes} onChange={(event) => setProblemDraft({ ...problemDraft, minutes: Number(event.target.value), codeReview: null })} /></label></div>
             <div className="journal-grid">
-              <label>My naive approach<textarea rows={4} value={problemDraft.naiveApproach} onChange={(event) => setProblemDraft({ ...problemDraft, naiveApproach: event.target.value })} placeholder="What would the brute-force solution do?" /></label>
-              <label>Key invariant / decision rule<textarea rows={4} value={problemDraft.invariant} onChange={(event) => setProblemDraft({ ...problemDraft, invariant: event.target.value })} placeholder="What stays true after every step?" /></label>
-              <label className="journal-wide">Optimal steps in plain English<textarea rows={5} value={problemDraft.solutionSteps} onChange={(event) => setProblemDraft({ ...problemDraft, solutionSteps: event.target.value })} placeholder="Explain the algorithm without code syntax." /></label>
-              <label>Complexity<textarea rows={3} value={problemDraft.complexity} onChange={(event) => setProblemDraft({ ...problemDraft, complexity: event.target.value })} placeholder="Time and space, with variables." /></label>
-              <label>Edge cases & tests<textarea rows={3} value={problemDraft.edgeCases} onChange={(event) => setProblemDraft({ ...problemDraft, edgeCases: event.target.value })} placeholder="Empty, duplicates, boundaries…" /></label>
-              <label>Mistakes / bug cause<textarea rows={3} value={problemDraft.mistakes} onChange={(event) => setProblemDraft({ ...problemDraft, mistakes: event.target.value })} placeholder="What went wrong and why?" /></label>
-              <label>60-second explanation<textarea rows={3} value={problemDraft.explanation} onChange={(event) => setProblemDraft({ ...problemDraft, explanation: event.target.value })} placeholder="Your interview-ready summary." /></label>
+              <label>My naive approach<textarea rows={4} value={problemDraft.naiveApproach} onChange={(event) => setProblemDraft({ ...problemDraft, naiveApproach: event.target.value, codeReview: null })} placeholder="What would the brute-force solution do?" /></label>
+              <label>Key invariant / decision rule<textarea rows={4} value={problemDraft.invariant} onChange={(event) => setProblemDraft({ ...problemDraft, invariant: event.target.value, codeReview: null })} placeholder="What stays true after every step?" /></label>
+              <label className="journal-wide">Optimal steps in plain English<textarea rows={5} value={problemDraft.solutionSteps} onChange={(event) => setProblemDraft({ ...problemDraft, solutionSteps: event.target.value, codeReview: null })} placeholder="Explain the algorithm without code syntax." /></label>
+              <label>Complexity<textarea rows={3} value={problemDraft.complexity} onChange={(event) => setProblemDraft({ ...problemDraft, complexity: event.target.value, codeReview: null })} placeholder="Time and space, with variables." /></label>
+              <label>Edge cases & tests<textarea rows={3} value={problemDraft.edgeCases} onChange={(event) => setProblemDraft({ ...problemDraft, edgeCases: event.target.value, codeReview: null })} placeholder="Empty, duplicates, boundaries…" /></label>
+              <label>Mistakes / bug cause<textarea rows={3} value={problemDraft.mistakes} onChange={(event) => setProblemDraft({ ...problemDraft, mistakes: event.target.value, codeReview: null })} placeholder="What went wrong and why?" /></label>
+              <label>60-second explanation<textarea rows={3} value={problemDraft.explanation} onChange={(event) => setProblemDraft({ ...problemDraft, explanation: event.target.value, codeReview: null })} placeholder="Your interview-ready summary." /></label>
             </div>
             <section className="code-review-lab" aria-labelledby="code-review-heading">
               <div className="code-review-heading">
-                <div><p className="eyebrow">AI code coach</p><h3 id="code-review-heading">Compare your code with online references.</h3><p>AI checks your approach against the current problem and established strategies. It coaches; it does not paste a full answer.</p></div>
+                <div><p className="eyebrow">AI submission coach</p><h3 id="code-review-heading">Score your code and your explanation.</h3><p>AI reads every journal field above plus your code, compares them with current references, and returns a weighted score, explanation feedback, and progressive hints.</p></div>
                 <span className="online-badge"><i />Online research</span>
               </div>
               <div className="code-review-controls">
                 <label>Language<select value={problemDraft.codeLanguage || settings.primaryLanguage} onChange={(event) => setProblemDraft({ ...problemDraft, codeLanguage: event.target.value, codeReview: null })}><option>Python</option><option>TypeScript</option><option>JavaScript</option><option>Java</option><option>C++</option><option>C#</option><option>Go</option><option>Rust</option><option>Swift</option><option>Kotlin</option></select></label>
-                <span>Your code is sent to OpenAI only when you request a review.</span>
-                <button className="review-button" disabled={reviewRunning || !problemDraft.code.trim()} onClick={() => void evaluateCode()}>{reviewRunning ? "Researching & reviewing…" : problemDraft.codeReview ? "Review again" : "Evaluate my code"}</button>
+                <span>Your code and journal answers are sent to OpenAI only when you request a review.</span>
+                <button className="review-button" disabled={reviewRunning || !hasReviewableInput(problemDraft)} onClick={() => void evaluateCode()}>{reviewRunning ? "Scoring your work…" : problemDraft.codeReview ? "Score again" : "Score all my work"}</button>
               </div>
-              <label className="code-input-label">Paste your solution<textarea className="code-input" rows={14} spellCheck={false} value={problemDraft.code} onChange={(event) => setProblemDraft({ ...problemDraft, code: event.target.value, codeReview: null })} placeholder={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution here…`} /></label>
-              {reviewRunning && <div className="review-loading" role="status"><span /><div><strong>Checking the problem and your approach…</strong><small>This usually takes under a minute.</small></div></div>}
+              <label className="code-input-label">Paste your solution <small>Optional if you only want feedback on your explanation.</small><textarea className="code-input" rows={14} spellCheck={false} value={problemDraft.code} onChange={(event) => setProblemDraft({ ...problemDraft, code: event.target.value, codeReview: null })} placeholder={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution here…`} /></label>
+              {reviewRunning && <div className="review-loading" role="status"><span /><div><strong>Checking your code, reasoning, and explanation…</strong><small>This usually takes under a minute.</small></div></div>}
               {reviewError && <div className="review-error" role="alert"><strong>Review could not run</strong><span>{reviewError}</span><small>If setup is needed, create <code>.env.local</code>, add <code>OPENAI_API_KEY=your-key</code>, then restart Job Hub.</small></div>}
               {problemDraft.codeReview && (
                 <div className="review-result">
@@ -958,6 +1017,13 @@ export default function JobHub() {
                     <div className="review-score"><strong>{problemDraft.codeReview.score}</strong><span>/100</span></div>
                     <div><strong>{problemDraft.codeReview.summary}</strong><small>Reviewed {formatSyncTime(problemDraft.codeReview.reviewedAt)} · {problemDraft.codeReview.model}</small></div>
                   </div>
+                  {problemDraft.codeReview.scoreBreakdown && (
+                    <div className="score-breakdown">
+                      <div className="score-breakdown-heading"><div><p className="eyebrow">Weighted scorecard</p><h4>How every part of your submission scored</h4></div>{problemDraft.codeReview.inputCoverage && <span>{problemDraft.codeReview.inputCoverage.used.length} inputs reviewed</span>}</div>
+                      <div className="score-bars">{scoreCategories(problemDraft.codeReview.scoreBreakdown).map((category) => <div className="score-bar-row" key={category.label}><div><strong>{category.label}</strong><small>{category.weight} of total</small></div><div className="score-bar-track"><span style={{ width: `${category.score}%` }} /></div><b>{category.score}</b></div>)}</div>
+                      {problemDraft.codeReview.inputCoverage && <div className="input-coverage"><div><strong>Evidence used</strong>{problemDraft.codeReview.inputCoverage.used.map((item) => <span className="coverage-chip used" key={item}>✓ {item}</span>)}</div>{problemDraft.codeReview.inputCoverage.missing.length > 0 && <div><strong>Still missing</strong>{problemDraft.codeReview.inputCoverage.missing.map((item) => <span className="coverage-chip missing" key={item}>+ {item}</span>)}</div>}</div>}
+                    </div>
+                  )}
                   <div className="review-two-column">
                     <article><p className="eyebrow">Correctness</p><p>{problemDraft.codeReview.correctness}</p></article>
                     <article><p className="eyebrow">Complexity</p><div className="complexity-pills"><span>Time <b>{problemDraft.codeReview.complexity.time}</b></span><span>Space <b>{problemDraft.codeReview.complexity.space}</b></span></div><p>{problemDraft.codeReview.complexity.assessment}</p></article>
@@ -980,6 +1046,20 @@ export default function JobHub() {
                     <div><strong>Improve</strong><span>{problemDraft.codeReview.interviewFeedback.improve}</span></div>
                     <div><strong>60-second outline</strong><span>{problemDraft.codeReview.interviewFeedback.explanationOutline}</span></div>
                   </div>
+                  {problemDraft.codeReview.explanationReview && (
+                    <div className="explanation-review-card">
+                      <div><p className="eyebrow">Your written explanation</p><h4>Communication review</h4><p>{problemDraft.codeReview.explanationReview.assessment}</p></div>
+                      <section><strong>Accurate points</strong>{problemDraft.codeReview.explanationReview.accuratePoints.length > 0 ? <ul>{problemDraft.codeReview.explanationReview.accuratePoints.map((point) => <li key={point}>{point}</li>)}</ul> : <p>No clearly supported points were provided yet.</p>}</section>
+                      <section><strong>Gaps to close</strong>{problemDraft.codeReview.explanationReview.gaps.length > 0 ? <ul>{problemDraft.codeReview.explanationReview.gaps.map((gap) => <li key={gap}>{gap}</li>)}</ul> : <p>No major communication gaps found.</p>}</section>
+                      <section className="structure-suggestion"><strong>How to structure your next attempt</strong><p>{problemDraft.codeReview.explanationReview.structureSuggestion}</p></section>
+                    </div>
+                  )}
+                  {problemDraft.codeReview.hints && problemDraft.codeReview.hints.length > 0 && (
+                    <div className="hint-section">
+                      <div className="review-section-title"><p className="eyebrow">Progressive hints</p><h4>Reveal only as much as you need</h4></div>
+                      <div className="hint-ladder">{problemDraft.codeReview.hints.map((hint, index) => <details key={`${hint.level}-${index}`} open={index === 0}><summary><span>{index + 1}</span><strong>{hint.level}</strong><small>{index === 0 ? "Start here" : "Open if still stuck"}</small></summary><p>{hint.text}</p></details>)}</div>
+                    </div>
+                  )}
                   {problemDraft.codeReview.sources.length > 0 && <div className="review-sources"><span>References checked</span>{problemDraft.codeReview.sources.map((source) => <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>{source.title} ↗</a>)}</div>}
                   <p className="review-disclaimer">AI feedback can be wrong and does not execute your code. Confirm with LeetCode tests before marking the problem solved.</p>
                 </div>

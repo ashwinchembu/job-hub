@@ -1566,6 +1566,12 @@ textarea:focus-visible {
   padding: 14px 22px 20px;
 }
 
+.code-input-label > small {
+  color: #73827c;
+  font-size: 10px;
+  font-weight: 500;
+}
+
 .code-input {
   width: 100%;
   min-height: 250px;
@@ -1706,6 +1712,115 @@ textarea:focus-visible {
   display: grid;
   gap: 5px;
   font-size: 12px;
+}
+
+.score-breakdown {
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfcf8;
+}
+
+.score-breakdown-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.score-breakdown-heading h4 {
+  margin: 5px 0 0;
+  font-size: 16px;
+}
+
+.score-breakdown-heading > span {
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: var(--mint);
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.score-bars {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.score-bar-row {
+  display: grid;
+  grid-template-columns: 170px 1fr 34px;
+  align-items: center;
+  gap: 12px;
+}
+
+.score-bar-row > div:first-child {
+  display: grid;
+  gap: 2px;
+  font-size: 11px;
+}
+
+.score-bar-row small {
+  color: var(--ink-soft);
+  font-size: 9px;
+}
+
+.score-bar-row > b {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  text-align: right;
+}
+
+.score-bar-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8e9e2;
+}
+
+.score-bar-track span {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--orange), var(--lime));
+}
+
+.input-coverage {
+  margin-top: 18px;
+  padding-top: 14px;
+  display: grid;
+  gap: 9px;
+  border-top: 1px dashed var(--line);
+}
+
+.input-coverage > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.input-coverage strong {
+  width: 85px;
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+
+.coverage-chip {
+  padding: 4px 7px;
+  border-radius: 6px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.coverage-chip.used {
+  background: #e0efe5;
+  color: #286245;
+}
+
+.coverage-chip.missing {
+  background: #f2eee2;
+  color: #75683d;
 }
 
 .review-two-column {
@@ -1851,6 +1966,120 @@ textarea:focus-visible {
 
 .interview-coach-card span {
   color: #c9d3cf;
+}
+
+.explanation-review-card {
+  margin: 0 22px 20px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid #cfd9d3;
+  border-radius: 13px;
+}
+
+.explanation-review-card > div,
+.explanation-review-card > section {
+  padding: 16px;
+}
+
+.explanation-review-card > div {
+  grid-column: 1 / -1;
+  border-bottom: 1px solid var(--line);
+  background: #f4f8f5;
+}
+
+.explanation-review-card h4 {
+  margin: 5px 0 7px;
+  font-size: 16px;
+}
+
+.explanation-review-card p,
+.explanation-review-card li {
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.explanation-review-card p {
+  margin: 5px 0 0;
+}
+
+.explanation-review-card ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.explanation-review-card > section + section {
+  border-left: 1px solid var(--line);
+}
+
+.explanation-review-card .structure-suggestion {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--line);
+  border-left: 0;
+  background: #fffaf0;
+}
+
+.hint-section {
+  padding: 20px 22px;
+  border-top: 1px solid var(--line);
+}
+
+.hint-ladder {
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.hint-ladder details {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+}
+
+.hint-ladder summary {
+  padding: 11px 13px;
+  display: grid;
+  grid-template-columns: 24px auto 1fr;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.hint-ladder summary::-webkit-details-marker {
+  display: none;
+}
+
+.hint-ladder summary > span {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--mint);
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.hint-ladder summary strong {
+  font-size: 11px;
+}
+
+.hint-ladder summary small {
+  justify-self: end;
+  color: var(--ink-soft);
+  font-size: 9px;
+}
+
+.hint-ladder details > p {
+  margin: 0;
+  padding: 0 13px 13px 46px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.55;
 }
 
 .review-sources {
@@ -2125,6 +2354,23 @@ textarea:focus-visible {
     grid-column: 1 / -1;
   }
 
+  .score-breakdown-heading {
+    display: grid;
+  }
+
+  .score-breakdown-heading > span {
+    justify-self: start;
+  }
+
+  .score-bar-row {
+    grid-template-columns: 125px 1fr 30px;
+    gap: 8px;
+  }
+
+  .input-coverage strong {
+    width: 100%;
+  }
+
   .review-two-column,
   .edge-case-grid {
     grid-template-columns: 1fr;
@@ -2138,6 +2384,20 @@ textarea:focus-visible {
   .interview-coach-card div {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+
+  .explanation-review-card {
+    grid-template-columns: 1fr;
+  }
+
+  .explanation-review-card > div,
+  .explanation-review-card .structure-suggestion {
+    grid-column: auto;
+  }
+
+  .explanation-review-card > section + section {
+    border-top: 1px solid var(--line);
+    border-left: 0;
   }
 
   .modal-backdrop {
