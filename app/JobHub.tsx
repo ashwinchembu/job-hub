@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { interviewPlan, InterviewProblem, weekThemes } from "./data";
 
 type View = "overview" | "applications" | "prep" | "data";
@@ -238,12 +238,163 @@ function JournalField({ id, label, hint, className = "", children }: { id: strin
     <div className={`journal-field ${className}`}>
       <div className="journal-field-heading">
         <label htmlFor={id}>{label}</label>
-        <button type="button" className="journal-hint-button" aria-expanded={showHint} aria-controls={hintId} onClick={() => setShowHint((open) => !open)}>{showHint ? "Hide hint" : "Hint"}</button>
+        <button type="button" className="journal-hint-button" aria-expanded={showHint} aria-controls={hintId} onClick={() => setShowHint((open) => !open)}>{showHint ? "Hide hint" : "Show hint"}</button>
       </div>
       {showHint && <p className="journal-hint" id={hintId}><b>Hint</b>{hint}</p>}
       {children}
     </div>
   );
+}
+
+function getProblemHintContext(problem: InterviewProblem) {
+  const pattern = problem.pattern.toLowerCase();
+  if (pattern.includes("sql")) return {
+    strategy: "the join, grouping, or ranking operation named by the cue",
+    bruteForce: "describe the table relationships and rows you must preserve before writing SQL",
+    state: "which rows remain after each join or grouping step",
+    operation: "table scans, joins, grouping, sorting, and ranking",
+    tests: "missing matches, duplicate values, ties, and nulls",
+    failure: "dropping rows with the wrong join or mishandling duplicates and ties",
+    code: "use clear aliases and verify the query returns the required rows when matches are absent",
+  };
+  if (pattern.includes("dynamic programming") || pattern.startsWith("dp")) return {
+    strategy: "a state definition, recurrence, and base cases",
+    bruteForce: "write the raw recursive choices and identify which subproblems repeat",
+    state: "exactly what dp[i] or dp[i][j] represents",
+    operation: "the number of states multiplied by the work per transition",
+    tests: "the smallest input, an unreachable state, and a case where both transitions compete",
+    failure: "an unclear state meaning, a missing base case, or reading a state before it is ready",
+    code: "make the state meaning visible in names and initialize every base case before transitions",
+  };
+  if (pattern.includes("backtracking")) return {
+    strategy: "choose, recurse, and undo around the cue's constraint",
+    bruteForce: "describe generating every candidate and filtering invalid results afterward",
+    state: "the current path, next choice position, and what has already been used",
+    operation: "the branching factor and maximum decision depth",
+    tests: "one-choice input, duplicate-sensitive input, and a branch that must backtrack early",
+    failure: "forgetting to undo state, reusing an item illegally, or emitting the same result twice",
+    code: "pair every state mutation with an undo and append copies of completed paths",
+  };
+  if (pattern.includes("graph") || pattern.includes("union find")) return {
+    strategy: "the traversal or connectivity structure identified by the cue",
+    bruteForce: "describe restarting a search from each candidate without reusing visited or distance state",
+    state: "visited nodes plus the queue, stack, parent map, indegree, or distance needed by this graph pattern",
+    operation: "how often vertices and edges enter the traversal or priority structure",
+    tests: "a disconnected case, a cycle, repeated edges, and the smallest graph",
+    failure: "marking visited too late, losing path state, or using DFS when layer order matters",
+    code: "define when a node becomes visited and keep every piece of path or level state together",
+  };
+  if (pattern.includes("tree") || pattern.includes("trie")) return {
+    strategy: "a traversal whose return value or carried state matches the cue",
+    bruteForce: "describe recomputing subtree or prefix information instead of carrying it once",
+    state: "what each recursive call receives and exactly what it returns",
+    operation: "node visits plus recursion depth or queue width",
+    tests: "an empty tree, one node, a skewed tree, and values that challenge the invariant",
+    failure: "mixing the returned subtree value with the separate global answer or missing a null base case",
+    code: "write the null case first and keep carried state separate from returned state",
+  };
+  if (pattern.includes("heap")) return {
+    strategy: "a heap that retains only the candidates required by the cue",
+    bruteForce: "describe sorting every candidate before keeping only the needed result",
+    state: "what each heap entry means and why the heap root is the next useful item",
+    operation: "heap pushes and pops multiplied by their logarithmic heap cost",
+    tests: "ties, fewer unique values, negative priorities, and k at its smallest or largest",
+    failure: "using the wrong min/max orientation or storing incomplete tie-breaking state",
+    code: "make each heap tuple's ordering explicit and enforce the intended heap size",
+  };
+  if (pattern.includes("binary search")) return {
+    strategy: "a monotonic decision and one consistent search interval",
+    bruteForce: "describe scanning every value or trying every candidate answer in order",
+    state: "the exact meaning of left, right, and whether the answer is still inside the interval",
+    operation: "how the remaining search range shrinks after each comparison",
+    tests: "one element, answer at either boundary, missing answer, and adjacent final pointers",
+    failure: "mixing inclusive and exclusive boundaries or moving the wrong side after equality",
+    code: "state the loop condition before coding and make each pointer update preserve that convention",
+  };
+  if (pattern.includes("interval")) return {
+    strategy: "sorting followed by the overlap or endpoint rule in the cue",
+    bruteForce: "describe comparing each interval with many others before using sorted order",
+    state: "the latest accepted or merged interval and what its endpoint guarantees",
+    operation: "the sorting cost plus the single pass through intervals",
+    tests: "touching endpoints, full containment, no overlap, and an interval covering all others",
+    failure: "using the wrong overlap inequality or updating the wrong endpoint",
+    code: "separate intervals before, overlapping with, and after the current result",
+  };
+  if (pattern.includes("linked list")) return {
+    strategy: "careful pointer movement and rewiring based on the cue",
+    bruteForce: "describe copying node values into an array or rebuilding the list before doing it in place",
+    state: "what prev, current, next, slow, or fast points to before each update",
+    operation: "how many times each node is visited",
+    tests: "empty list, one node, two nodes, and odd versus even length",
+    failure: "overwriting the next pointer before saving it or creating a cycle",
+    code: "save every pointer you still need before mutating a link",
+  };
+  if (pattern.includes("stack")) return {
+    strategy: "LIFO state that represents unresolved work",
+    bruteForce: "describe rescanning earlier elements instead of preserving unresolved items on a stack",
+    state: "what every stack entry represents and the order entries must maintain",
+    operation: "how many times each item can be pushed and popped",
+    tests: "empty input, immediately invalid input, nested input, and a long unresolved suffix",
+    failure: "reading an empty stack or popping operands in the wrong order",
+    code: "guard every pop and document whether the stack stores values, indices, or pairs",
+  };
+  if (pattern.includes("sliding window")) return {
+    strategy: "an expanding window with a precise validity rule",
+    bruteForce: "describe recomputing every candidate substring or subarray independently",
+    state: "what the current window contains and exactly when it becomes invalid",
+    operation: "how often the left and right boundaries move across the input",
+    tests: "all-valid input, immediate duplicates or violations, one element, and a best window at the end",
+    failure: "shrinking too little, updating the answer while invalid, or leaving stale counts",
+    code: "write the invalid-window condition first and update counts symmetrically when boundaries move",
+  };
+  if (pattern.includes("two pointers")) return {
+    strategy: "two boundaries whose movement is justified by ordered information",
+    bruteForce: "describe checking every pair or boundary combination before eliminating choices",
+    state: "what is known about all positions outside and between the two pointers",
+    operation: "how many total pointer movements occur",
+    tests: "pointers meeting immediately, duplicates, no valid result, and the answer at both ends",
+    failure: "moving the pointer that cannot improve the result or skipping duplicate handling",
+    code: "state why each comparison lets exactly one pointer move safely",
+  };
+  if (pattern.includes("greedy")) return {
+    strategy: "the locally safe choice stated by the cue",
+    bruteForce: "describe exploring all possible choices before proving one choice can be committed early",
+    state: "the boundary or summary that proves earlier choices never need to be revisited",
+    operation: "the sorting cost, if any, plus the single greedy scan",
+    tests: "a case where the first tempting choice fails, an impossible case, and a boundary equality",
+    failure: "making a local choice without proving it preserves a global solution",
+    code: "name the quantity being optimized and update only the state needed for the next safe choice",
+  };
+  return {
+    strategy: "a map, set, frequency table, or prefix state guided by the cue",
+    bruteForce: "describe the repeated scan, pair check, or recomputation you would use before hashing",
+    state: "what the map, set, counts, or prefix values contain after each processed item",
+    operation: "the number and expected cost of lookups, inserts, and array passes",
+    tests: "duplicates, negative values, one element, empty input when allowed, and an answer at a boundary",
+    failure: "storing or checking in the wrong order, reusing the current item, or mishandling duplicates",
+    code: "make the stored key and value meaning explicit and check update order carefully",
+  };
+}
+
+function getJournalHints(problem: InterviewProblem) {
+  const context = getProblemHintContext(problem);
+  const cue = `“${problem.cue}”`;
+  return {
+    status: `For ${problem.title}, use Attempted until you can complete and explain the solution without relying on the answer.`,
+    confidence: `Can you explain why ${cue} is true and reproduce the ${problem.pattern} solution tomorrow without notes?`,
+    minutes: `${problem.title} has a ${problem.targetMinutes}-minute target. Include thinking, coding, and testing time.`,
+    bruteForceApproach: `${problem.title}: ${context.bruteForce}. Then state when that baseline finds the answer.`,
+    bruteForceTime: `For ${problem.title}, count the exhaustive candidates or repeated work before applying the insight ${cue}`,
+    bruteForceSpace: `For the baseline ${problem.title} solution, count only auxiliary storage and recursion; name what grows with the input.`,
+    invariant: `Turn ${cue} into a precise invariant about ${context.state}. State when it is true and why each update preserves it.`,
+    optimalSteps: `Build the ${problem.title} procedure around ${context.strategy}. Write the initialization, repeated decision, update, and return in order.`,
+    optimalTime: `For this ${problem.pattern} solution, justify time using ${context.operation}; do not give Big-O without the reason.`,
+    optimalSpace: `Name every growing structure used for ${context.state}, then give the largest auxiliary-space term.`,
+    edgeCases: `For ${problem.title}, test ${context.tests}. Include concrete input and expected output for each.`,
+    mistakes: `A likely ${problem.title} failure is ${context.failure}. Record whether that happened and the rule that prevents it.`,
+    explanation: `Say: baseline and its cost → ${cue} → ${context.strategy} → final time and space. Keep the explanation specific to ${problem.title}.`,
+    code: `In Python 3, ${context.code}. Make the implementation match the invariant ${cue}`,
+  };
 }
 
 function pad(value: number) {
@@ -1052,6 +1203,7 @@ export default function JobHub() {
   }
 
   if (!ready) return <div className="app-loading">Opening Job Hub…</div>;
+  const journalHints = getJournalHints(selectedProblem ?? todayProblem);
 
   return (
     <div className="app-shell">
@@ -1113,9 +1265,9 @@ export default function JobHub() {
             <div className="modal-header"><div><p className="eyebrow">Day {selectedProblem.day} · Week {selectedProblem.week}</p><h2 id="journal-title">{selectedProblem.title}</h2><p>{selectedProblem.pattern} · {selectedProblem.targetMinutes} minute target</p></div><button className="close-button" onClick={() => setSelectedProblem(null)} aria-label="Close">×</button></div>
             <div className="journal-callout"><strong>Recognition cue</strong><span>{selectedProblem.cue}</span><a href={selectedProblem.url} target="_blank" rel="noreferrer">Open LeetCode ↗</a></div>
             <div className="journal-status-row">
-              <JournalField id="journal-status" label="Status" hint="Use Attempted until you can complete the solution."><select id="journal-status" aria-describedby="journal-status-hint" value={problemDraft.status} onChange={(event) => setProblemDraft({ ...problemDraft, status: event.target.value as PrepStatus, codeReview: null })}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select></JournalField>
-              <JournalField id="journal-confidence" label="Confidence" hint="Rate whether you could reproduce and explain it tomorrow without notes."><select id="journal-confidence" aria-describedby="journal-confidence-hint" value={problemDraft.confidence} onChange={(event) => setProblemDraft({ ...problemDraft, confidence: Number(event.target.value), codeReview: null })}><option value="0">Not rated</option><option value="1">1 — Cannot reproduce</option><option value="2">2 — Need notes</option><option value="3">3 — Mostly clear</option><option value="4">4 — Can re-code</option><option value="5">5 — Can explain cold</option></select></JournalField>
-              <JournalField id="journal-minutes" label="Minutes" hint="Enter time manually or let the timer add it."><input id="journal-minutes" aria-describedby="journal-minutes-hint" type="number" min="0" value={problemDraft.minutes} onChange={(event) => setProblemDraft({ ...problemDraft, minutes: Number(event.target.value), codeReview: null })} /></JournalField>
+              <JournalField id="journal-status" label="Status" hint={journalHints.status}><select id="journal-status" aria-describedby="journal-status-hint" value={problemDraft.status} onChange={(event) => setProblemDraft({ ...problemDraft, status: event.target.value as PrepStatus, codeReview: null })}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select></JournalField>
+              <JournalField id="journal-confidence" label="Confidence" hint={journalHints.confidence}><select id="journal-confidence" aria-describedby="journal-confidence-hint" value={problemDraft.confidence} onChange={(event) => setProblemDraft({ ...problemDraft, confidence: Number(event.target.value), codeReview: null })}><option value="0">Not rated</option><option value="1">1 — Cannot reproduce</option><option value="2">2 — Need notes</option><option value="3">3 — Mostly clear</option><option value="4">4 — Can re-code</option><option value="5">5 — Can explain cold</option></select></JournalField>
+              <JournalField id="journal-minutes" label="Minutes" hint={journalHints.minutes}><input id="journal-minutes" aria-describedby="journal-minutes-hint" type="number" min="0" value={problemDraft.minutes} onChange={(event) => setProblemDraft({ ...problemDraft, minutes: Number(event.target.value), codeReview: null })} /></JournalField>
             </div>
             <div className={`journal-timer ${timerRunning && timerProblemId === selectedProblem.id ? "is-running" : ""}`}>
               <div className="journal-timer-clock"><span>Practice timer</span><strong>{timerProblemId === selectedProblem.id ? formatTimer(timerSeconds) : "00:00"}</strong></div>
@@ -1127,16 +1279,16 @@ export default function JobHub() {
               )}
             </div>
             <div className="journal-grid">
-              <JournalField id="brute-force-approach" className="journal-wide" label="My brute-force approach" hint="Start with the simplest correct method. Name what you try, what you compare, and when you return."><textarea id="brute-force-approach" aria-describedby="brute-force-approach-hint" rows={4} value={problemDraft.naiveApproach} onChange={(event) => setProblemDraft({ ...problemDraft, naiveApproach: event.target.value, codeReview: null })} placeholder="What would the brute-force solution do, step by step?" /></JournalField>
-              <JournalField id="brute-force-time" label="Brute-force time complexity" hint="Count how many inputs, pairs, or combinations the repeated work visits."><textarea id="brute-force-time" aria-describedby="brute-force-time-hint" rows={2} value={problemDraft.bruteForceTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n²), because…" /></JournalField>
-              <JournalField id="brute-force-space" label="Brute-force space complexity" hint="Count extra maps, sets, arrays, stacks, or recursive calls—not the input itself."><textarea id="brute-force-space" aria-describedby="brute-force-space-hint" rows={2} value={problemDraft.bruteForceSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceSpaceComplexity: event.target.value, codeReview: null })} placeholder="Example: O(1) auxiliary space, because…" /></JournalField>
-              <JournalField id="journal-invariant" className="journal-wide" label="Key invariant / decision rule" hint="Complete: “After processing each item, I know that…” Then explain why that makes the next choice safe."><textarea id="journal-invariant" aria-describedby="journal-invariant-hint" rows={4} value={problemDraft.invariant} onChange={(event) => setProblemDraft({ ...problemDraft, invariant: event.target.value, codeReview: null })} placeholder="What stays true after every step, and why is each choice safe?" /></JournalField>
-              <JournalField id="optimal-steps" className="journal-wide" label="Optimal algorithm steps" hint="Write 3–6 numbered actions in plain English. Describe the procedure without Python syntax."><textarea id="optimal-steps" aria-describedby="optimal-steps-hint" rows={5} value={problemDraft.solutionSteps} onChange={(event) => setProblemDraft({ ...problemDraft, solutionSteps: event.target.value, codeReview: null })} placeholder="Write the optimized algorithm step by step in plain English." /></JournalField>
-              <JournalField id="optimal-time" label="Optimal time complexity" hint="Explain how many times each item is visited and the cost of lookups, sorting, or heap work."><textarea id="optimal-time" aria-describedby="optimal-time-hint" rows={2} value={problemDraft.optimalTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n), because each item…" /></JournalField>
-              <JournalField id="optimal-space" label="Optimal space complexity" hint="State the largest extra structure or recursion depth and how it grows with n."><textarea id="optimal-space" aria-describedby="optimal-space-hint" rows={2} value={problemDraft.optimalSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalSpaceComplexity: event.target.value, codeReview: null })} placeholder="State auxiliary space and explain it." /></JournalField>
-              <JournalField id="edge-cases" label="Edge cases & tests" hint="Give at least three concrete inputs and expected outputs: smallest case, duplicates, boundaries, or negatives."><textarea id="edge-cases" aria-describedby="edge-cases-hint" rows={3} value={problemDraft.edgeCases} onChange={(event) => setProblemDraft({ ...problemDraft, edgeCases: event.target.value, codeReview: null })} placeholder="Empty, duplicates, boundaries…" /></JournalField>
-              <JournalField id="mistakes" label="Mistakes / bug cause" hint="Record the symptom, root cause, and one rule that will prevent the same bug next time."><textarea id="mistakes" aria-describedby="mistakes-hint" rows={3} value={problemDraft.mistakes} onChange={(event) => setProblemDraft({ ...problemDraft, mistakes: event.target.value, codeReview: null })} placeholder="What went wrong and why?" /></JournalField>
-              <JournalField id="interview-explanation" className="journal-wide" label="Interview explanation (about 60 seconds)" hint="Interviews test whether you can explain before coding. Briefly cover the problem, brute-force tradeoff, optimal insight, steps, and complexity."><textarea id="interview-explanation" aria-describedby="interview-explanation-hint" rows={4} value={problemDraft.explanation} onChange={(event) => setProblemDraft({ ...problemDraft, explanation: event.target.value, codeReview: null })} placeholder="Write what you would actually say aloud to the interviewer in about 60 seconds." /></JournalField>
+              <JournalField id="brute-force-approach" className="journal-wide" label="My brute-force approach" hint={journalHints.bruteForceApproach}><textarea id="brute-force-approach" aria-describedby="brute-force-approach-hint" rows={4} value={problemDraft.naiveApproach} onChange={(event) => setProblemDraft({ ...problemDraft, naiveApproach: event.target.value, codeReview: null })} placeholder="What would the brute-force solution do, step by step?" /></JournalField>
+              <JournalField id="brute-force-time" label="Brute-force time complexity" hint={journalHints.bruteForceTime}><textarea id="brute-force-time" aria-describedby="brute-force-time-hint" rows={2} value={problemDraft.bruteForceTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n²), because…" /></JournalField>
+              <JournalField id="brute-force-space" label="Brute-force space complexity" hint={journalHints.bruteForceSpace}><textarea id="brute-force-space" aria-describedby="brute-force-space-hint" rows={2} value={problemDraft.bruteForceSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceSpaceComplexity: event.target.value, codeReview: null })} placeholder="Example: O(1) auxiliary space, because…" /></JournalField>
+              <JournalField id="journal-invariant" className="journal-wide" label="Key invariant / decision rule" hint={journalHints.invariant}><textarea id="journal-invariant" aria-describedby="journal-invariant-hint" rows={4} value={problemDraft.invariant} onChange={(event) => setProblemDraft({ ...problemDraft, invariant: event.target.value, codeReview: null })} placeholder="What stays true after every step, and why is each choice safe?" /></JournalField>
+              <JournalField id="optimal-steps" className="journal-wide" label="Optimal algorithm steps" hint={journalHints.optimalSteps}><textarea id="optimal-steps" aria-describedby="optimal-steps-hint" rows={5} value={problemDraft.solutionSteps} onChange={(event) => setProblemDraft({ ...problemDraft, solutionSteps: event.target.value, codeReview: null })} placeholder="Write the optimized algorithm step by step in plain English." /></JournalField>
+              <JournalField id="optimal-time" label="Optimal time complexity" hint={journalHints.optimalTime}><textarea id="optimal-time" aria-describedby="optimal-time-hint" rows={2} value={problemDraft.optimalTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n), because each item…" /></JournalField>
+              <JournalField id="optimal-space" label="Optimal space complexity" hint={journalHints.optimalSpace}><textarea id="optimal-space" aria-describedby="optimal-space-hint" rows={2} value={problemDraft.optimalSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalSpaceComplexity: event.target.value, codeReview: null })} placeholder="State auxiliary space and explain it." /></JournalField>
+              <JournalField id="edge-cases" label="Edge cases & tests" hint={journalHints.edgeCases}><textarea id="edge-cases" aria-describedby="edge-cases-hint" rows={3} value={problemDraft.edgeCases} onChange={(event) => setProblemDraft({ ...problemDraft, edgeCases: event.target.value, codeReview: null })} placeholder="Empty, duplicates, boundaries…" /></JournalField>
+              <JournalField id="mistakes" label="Mistakes / bug cause" hint={journalHints.mistakes}><textarea id="mistakes" aria-describedby="mistakes-hint" rows={3} value={problemDraft.mistakes} onChange={(event) => setProblemDraft({ ...problemDraft, mistakes: event.target.value, codeReview: null })} placeholder="What went wrong and why?" /></JournalField>
+              <JournalField id="interview-explanation" className="journal-wide" label="Interview explanation (about 60 seconds)" hint={journalHints.explanation}><textarea id="interview-explanation" aria-describedby="interview-explanation-hint" rows={4} value={problemDraft.explanation} onChange={(event) => setProblemDraft({ ...problemDraft, explanation: event.target.value, codeReview: null })} placeholder="Write what you would actually say aloud to the interviewer in about 60 seconds." /></JournalField>
             </div>
             <section className="code-review-lab" aria-labelledby="code-review-heading">
               <div className="code-review-heading">
@@ -1148,7 +1300,7 @@ export default function JobHub() {
                 <span>Your code and journal answers are sent to OpenAI only when you request a review.</span>
                 <button className="review-button" disabled={reviewRunning || !hasReviewableInput(problemDraft)} onClick={() => void evaluateCode()}>{reviewRunning ? "Scoring your work…" : problemDraft.codeReview ? "Score again" : "Score all my work"}</button>
               </div>
-              <JournalField id="solution-code" className="code-input-label" label={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution`} hint="Paste runnable code that matches your optimal steps. This is separate from what you would say aloud."><textarea id="solution-code" aria-describedby="solution-code-hint" className="code-input" rows={14} spellCheck={false} value={problemDraft.code} onChange={(event) => setProblemDraft({ ...problemDraft, code: event.target.value, codeReview: null })} placeholder={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution here…`} /></JournalField>
+              <JournalField id="solution-code" className="code-input-label" label={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution`} hint={journalHints.code}><textarea id="solution-code" aria-describedby="solution-code-hint" className="code-input" rows={14} spellCheck={false} value={problemDraft.code} onChange={(event) => setProblemDraft({ ...problemDraft, code: event.target.value, codeReview: null })} placeholder={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution here…`} /></JournalField>
               {reviewRunning && <div className="review-loading" role="status"><span /><div><strong>Checking your code, reasoning, and explanation…</strong><small>This usually takes under a minute.</small></div></div>}
               {reviewError && <div className="review-error" role="alert"><strong>Review could not run</strong><span>{reviewError}</span><small>Your journal stays saved in this browser. If the connection message repeats, confirm Job Hub is still running locally and refresh.</small></div>}
               {problemDraft.codeReview && (
