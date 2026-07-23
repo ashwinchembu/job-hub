@@ -4,6 +4,7 @@ import test from "node:test";
 
 const dataSource = await readFile(new URL("../app/data.ts", import.meta.url), "utf8");
 const hubSource = await readFile(new URL("../app/JobHub.tsx", import.meta.url), "utf8");
+const trackerSource = await readFile(new URL("../build/local-job-tracker.ts", import.meta.url), "utf8");
 
 function numbersFrom(source) {
   return [...source.matchAll(/\b\d+\b/g)].map((match) => Number(match[0]));
@@ -34,6 +35,14 @@ test("application sync covers interval, visibility, focus, and reconnect", () =>
   assert.match(hubSource, /addEventListener\("focus"/);
   assert.match(hubSource, /addEventListener\("online"/);
   assert.match(hubSource, /addEventListener\("visibilitychange"/);
+});
+
+test("workbook saves stream to the app as live updates", () => {
+  assert.match(trackerSource, /watchFile\(trackerPath/);
+  assert.match(trackerSource, /event: workbook-change/);
+  assert.match(trackerSource, /request.method === "POST" && isWebhook/);
+  assert.match(hubSource, /new EventSource\("\/api\/job-tracker\/stream"\)/);
+  assert.match(hubSource, /setLiveSyncConnected\(true\)/);
 });
 
 test("practice and sync timing retain second precision", () => {

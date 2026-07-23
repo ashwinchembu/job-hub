@@ -623,6 +623,7 @@ export default function JobHub() {
   const [reviewRunning, setReviewRunning] = useState(false);
   const [reviewError, setReviewError] = useState("");
   const [toast, setToast] = useState("");
+  const [liveSyncConnected, setLiveSyncConnected] = useState(false);
   const [sheetSync, setSheetSync] = useState<SheetSyncState>({
     status: "connecting",
     workbook: "",
@@ -723,6 +724,24 @@ export default function JobHub() {
       window.removeEventListener("focus", syncOnFocus);
       window.removeEventListener("online", syncOnFocus);
       document.removeEventListener("visibilitychange", syncOnVisible);
+    };
+  }, [ready, syncApplicationsFromSheet]);
+
+  useEffect(() => {
+    if (!ready || typeof EventSource === "undefined") return;
+    const liveUpdates = new EventSource("/api/job-tracker/stream");
+    const refreshFromWorkbook = () => {
+      setToast("Workbook saved · refreshing applications");
+      void syncApplicationsFromSheet();
+      window.setTimeout(() => void syncApplicationsFromSheet(), 900);
+    };
+    liveUpdates.onopen = () => setLiveSyncConnected(true);
+    liveUpdates.onerror = () => setLiveSyncConnected(false);
+    liveUpdates.addEventListener("workbook-change", refreshFromWorkbook);
+    return () => {
+      liveUpdates.removeEventListener("workbook-change", refreshFromWorkbook);
+      liveUpdates.close();
+      setLiveSyncConnected(false);
     };
   }, [ready, syncApplicationsFromSheet]);
 
@@ -1197,16 +1216,16 @@ export default function JobHub() {
     return (
       <>
         <section className="page-heading">
-          <div><p className="eyebrow">Application pipeline</p><h1>Every role. One next move.</h1><p>The Applications sheet is the source of truth. Job Hub checks it every 30 seconds, when this tab becomes visible, and when your connection returns.</p></div>
+          <div><p className="eyebrow">Application pipeline</p><h1>Every role. One next move.</h1><p>The Applications sheet is the source of truth. Saving the workbook refreshes Job Hub live; a 30-second check remains as a fallback.</p></div>
           <button className="primary-button" onClick={openNewApplication}>+ Add application</button>
         </section>
         <div className={`sheet-sync-banner sync-${sheetSync.status}`}>
           <span className="sheet-sync-dot" />
           <span>
-            <b>{sheetSync.status === "connected" ? `${sheetSync.rowCount} applications synced` : sheetSync.status === "connecting" ? "Syncing applications" : "Workbook sync needs attention"}</b>
+            <b>{sheetSync.status === "connected" ? `${sheetSync.rowCount} applications synced${liveSyncConnected ? " · Live" : ""}` : sheetSync.status === "connecting" ? "Syncing applications" : "Workbook sync needs attention"}</b>
             <small>
               {sheetSync.status === "connected"
-                ? `${sheetSync.workbook} · checked ${formatSyncTime(sheetSync.checkedAt)} · workbook updated ${formatSyncTime(sheetSync.modifiedAt)} · auto-refresh every 30 seconds`
+                ? `${sheetSync.workbook} · ${liveSyncConnected ? "watching for saves" : "live connection reconnecting"} · checked ${formatSyncTime(sheetSync.checkedAt)} · 30-second fallback`
                 : sheetSync.message}
             </small>
           </span>
@@ -1288,7 +1307,7 @@ export default function JobHub() {
         <section className="data-grid">
           <article className="data-card featured"><div className="data-icon">↓</div><div><h2>Export a backup</h2><p>Download applications, coding progress, journals, and settings as one JSON file.</p><button className="primary-button" onClick={exportBackup}>Download backup</button></div></article>
           <article className="data-card"><div className="data-icon">↑</div><div><h2>Import data</h2><p>Restore a Job Hub JSON backup, or import an Applications CSV from your spreadsheet.</p><button className="secondary-button" onClick={() => fileInputRef.current?.click()}>Choose JSON or CSV</button></div></article>
-          <article className="data-card"><div className="data-icon">↻</div><div><h2>Workbook connection</h2><p>{sheetSync.status === "connected" ? `${sheetSync.rowCount} rows connected from ${sheetSync.workbook}. Last checked ${formatSyncTime(sheetSync.checkedAt)}; auto-refresh runs every 30 seconds.` : sheetSync.message}</p><button className="secondary-button" disabled={sheetSync.status === "connecting"} onClick={() => void syncApplicationsFromSheet(true)}>Sync applications now</button></div></article>
+          <article className="data-card"><div className="data-icon">↻</div><div><h2>Workbook connection</h2><p>{sheetSync.status === "connected" ? `${sheetSync.rowCount} rows connected from ${sheetSync.workbook}. ${liveSyncConnected ? "Live updates are connected and refresh immediately after a save." : "Live updates are reconnecting; the 30-second fallback remains active."}` : sheetSync.message}</p><button className="secondary-button" disabled={sheetSync.status === "connecting"} onClick={() => void syncApplicationsFromSheet(true)}>Sync applications now</button></div></article>
           <article className="data-card"><div className="data-icon">↺</div><div><h2>Restore demo</h2><p>Bring back three clearly labeled sample applications and reset the coding plan.</p><button className="secondary-button" onClick={resetDemo}>Restore demo data</button></div></article>
           <article className="data-card danger-card"><div className="data-icon">×</div><div><h2>Clear local data</h2><p>Remove all applications and prep journals saved in this browser. This cannot be undone.</p><button className="danger-button" onClick={clearAll}>Clear everything</button></div></article>
         </section>

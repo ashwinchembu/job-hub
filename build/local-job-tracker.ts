@@ -1,4 +1,6 @@
+import { unwatchFile, watchFile } from "node:fs";
 import { stat } from "node:fs/promises";
+import type { ServerResponse } from "node:http";
 import path from "node:path";
 import { readSheet } from "read-excel-file/node";
 import type { Plugin } from "vite";
@@ -143,13 +145,83 @@ export function localJobTracker(): Plugin {
   const trackerPath = resolveTrackerPath();
   let cachedModifiedAt = -1;
   let cachedApplications: SyncedApplication[] = [];
+  let watcherActive = false;
+  let broadcastTimer: NodeJS.Timeout | null = null;
+  const liveClients = new Set<ServerResponse>();
+
+  const broadcastWorkbookChange = (source: "file" | "webhook") => {
+    cachedModifiedAt = -1;
+    const payload = JSON.stringify({ source, changedAt: new Date().toISOString() });
+    for (const client of liveClients) {
+      client.write(`event: workbook-change\ndata: ${payload}\n\n`);
+    }
+  };
+
+  const scheduleWorkbookChange = (source: "file" | "webhook") => {
+    if (broadcastTimer) clearTimeout(broadcastTimer);
+    broadcastTimer = setTimeout(() => {
+      broadcastTimer = null;
+      broadcastWorkbookChange(source);
+    }, 450);
+  };
+
+  const startWatcher = () => {
+    if (watcherActive) return;
+    watcherActive = true;
+    watchFile(trackerPath, { interval: 750 }, (current, previous) => {
+      if (current.mtimeMs > 0 && current.mtimeMs !== previous.mtimeMs) {
+        scheduleWorkbookChange("file");
+      }
+    });
+  };
+
+  const stopWatcher = () => {
+    if (!watcherActive) return;
+    watcherActive = false;
+    unwatchFile(trackerPath);
+    if (broadcastTimer) clearTimeout(broadcastTimer);
+    broadcastTimer = null;
+  };
 
   return {
     name: "local-job-tracker",
     apply: "serve",
     configureServer(server) {
       server.middlewares.use("/api/job-tracker", async (request, response, next) => {
-        if (request.method !== "GET") {
+        const route = request.url?.split("?")[0] || "/";
+        const isLiveStream = route === "/stream" || route === "/api/job-tracker/stream";
+        const isWebhook = route === "/webhook" || route === "/api/job-tracker/webhook";
+
+        if (request.method === "GET" && isLiveStream) {
+          response.statusCode = 200;
+          response.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+          response.setHeader("Cache-Control", "no-cache, no-transform");
+          response.setHeader("Connection", "keep-alive");
+          response.setHeader("X-Accel-Buffering", "no");
+          response.flushHeaders();
+          response.write(`event: connected\ndata: ${JSON.stringify({ connectedAt: new Date().toISOString() })}\n\n`);
+          liveClients.add(response);
+          startWatcher();
+
+          const heartbeat = setInterval(() => response.write(": keepalive\n\n"), 15_000);
+          request.once("close", () => {
+            clearInterval(heartbeat);
+            liveClients.delete(response);
+            if (liveClients.size === 0) stopWatcher();
+          });
+          return;
+        }
+
+        if (request.method === "POST" && isWebhook) {
+          scheduleWorkbookChange("webhook");
+          response.statusCode = 202;
+          response.setHeader("Content-Type", "application/json; charset=utf-8");
+          response.setHeader("Cache-Control", "no-store");
+          response.end(JSON.stringify({ accepted: true, liveClients: liveClients.size }));
+          return;
+        }
+
+        if (request.method !== "GET" || route !== "/") {
           next();
           return;
         }
@@ -192,6 +264,12 @@ export function localJobTracker(): Plugin {
             }),
           );
         }
+      });
+
+      server.httpServer?.once("close", () => {
+        for (const client of liveClients) client.end();
+        liveClients.clear();
+        stopWatcher();
       });
     },
   };
