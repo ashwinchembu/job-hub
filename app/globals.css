@@ -619,6 +619,11 @@ textarea:focus-visible {
   font-size: 26px;
 }
 
+.timer-panel small {
+  color: #9fb5ac;
+  font-size: 9px;
+}
+
 .timer-panel .secondary-button {
   border-color: rgba(255, 255, 255, 0.42);
   background: white;

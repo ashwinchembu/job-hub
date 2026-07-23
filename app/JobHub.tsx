@@ -107,6 +107,7 @@ type ProblemProgress = {
   status: PrepStatus;
   confidence: number;
   minutes: number;
+  totalSeconds: number;
   naiveApproach: string;
   bruteForceTimeComplexity: string;
   bruteForceSpaceComplexity: string;
@@ -149,6 +150,7 @@ const emptyProgress: ProblemProgress = {
   status: "Not Started",
   confidence: 0,
   minutes: 0,
+  totalSeconds: 0,
   naiveApproach: "",
   bruteForceTimeComplexity: "",
   bruteForceSpaceComplexity: "",
@@ -192,6 +194,7 @@ function normalizeStoredProgress(item?: Partial<ProblemProgress>): ProblemProgre
   const normalized: ProblemProgress = {
     ...emptyProgress,
     ...item,
+    totalSeconds: typeof item?.totalSeconds === "number" ? item.totalSeconds : (item?.minutes ?? 0) * 60,
     bruteForceTimeComplexity: item?.bruteForceTimeComplexity || "",
     bruteForceSpaceComplexity: item?.bruteForceSpaceComplexity || "",
     optimalTimeComplexity: item?.optimalTimeComplexity || item?.complexity || "",
@@ -864,9 +867,11 @@ export default function JobHub() {
     const minutes = Math.max(1, Math.ceil(timerSeconds / 60));
     const timerKey = String(timerProblemId);
     if (selectedProblem?.id === timerProblemId) {
+      const updatedSeconds = (problemDraft.totalSeconds || problemDraft.minutes * 60) + timerSeconds;
       const updatedDraft: ProblemProgress = {
         ...problemDraft,
-        minutes: problemDraft.minutes + minutes,
+        minutes: Math.max(1, Math.ceil(updatedSeconds / 60)),
+        totalSeconds: updatedSeconds,
         status: problemDraft.status === "Not Started" ? "Attempted" : problemDraft.status,
         lastAttempt: today,
       };
@@ -875,11 +880,13 @@ export default function JobHub() {
     } else {
       setProgress((items) => {
         const current = normalizeStoredProgress(items[timerKey]);
+        const updatedSeconds = (current.totalSeconds || current.minutes * 60) + timerSeconds;
         return {
           ...items,
           [timerKey]: {
             ...current,
-            minutes: current.minutes + minutes,
+            minutes: Math.max(1, Math.ceil(updatedSeconds / 60)),
+            totalSeconds: updatedSeconds,
             status: current.status === "Not Started" ? "Attempted" : current.status,
             lastAttempt: today,
           },
@@ -916,7 +923,10 @@ export default function JobHub() {
       if (file.name.toLowerCase().endsWith(".json")) {
         const parsed = JSON.parse(text);
         if (Array.isArray(parsed.applications)) setApplications(parsed.applications);
-        if (parsed.progress && typeof parsed.progress === "object") setProgress(parsed.progress);
+        if (parsed.progress && typeof parsed.progress === "object") {
+          const importedProgress = parsed.progress as Record<string, Partial<ProblemProgress>>;
+          setProgress(Object.fromEntries(Object.entries(importedProgress).map(([id, item]) => [id, normalizeStoredProgress(item)])));
+        }
         if (parsed.settings && typeof parsed.settings === "object") setSettings(parsed.settings);
         showToast("Backup imported");
       } else {
@@ -979,6 +989,9 @@ export default function JobHub() {
     const focusProblem = interviewPlan[focusProblemIndex];
     const focusOffset = focusProblemIndex - planDayIndex;
     const focusProgress = progress[String(focusProblem.id)] ?? emptyProgress;
+    const focusTimerActive = timerRunning && timerProblemId === focusProblem.id;
+    const focusWorkingSeconds = (focusProgress.totalSeconds || focusProgress.minutes * 60) + (focusTimerActive ? timerSeconds : 0);
+    const focusTimeLabel = focusProgress.status.startsWith("Solved") ? "Completed working time" : focusWorkingSeconds > 0 ? "Total working time" : "Practice timer";
     const focusHasSavedJournal = Boolean(progress[String(focusProblem.id)]);
     const focusScheduledDate = addDays(settings.startDate, focusProblem.day - 1);
     const focusDayLabel = focusOffset === 0 ? "Today" : focusOffset === 1 ? "Tomorrow" : `In ${focusOffset} days`;
@@ -1030,10 +1043,9 @@ export default function JobHub() {
               <div className="focus-meta">
                 <span><b>{focusProblem.targetMinutes}</b> min target</span>
                 <span><b>{settings.primaryLanguage}</b> language</span>
-                <span><b>{focusProgress.minutes}</b> min logged</span>
               </div>
               <div className="timer-panel">
-                <div><span>Session timer</span><strong>{timerProblemId === focusProblem.id ? formatTimer(timerSeconds) : "00:00"}</strong></div>
+                <div><span>{focusTimeLabel}</span><strong>{formatTimer(focusWorkingSeconds)}</strong>{focusWorkingSeconds > 0 && <small>{focusTimerActive ? "Live session included" : focusProgress.status.startsWith("Solved") ? "Recorded for this completed problem" : "Saved across practice sessions"}</small>}</div>
                 <div className="button-row">
                   {!timerRunning || timerProblemId !== focusProblem.id ? (
                     <button className="secondary-button" onClick={() => startTimer(focusProblem)}>Start timer</button>
@@ -1267,7 +1279,7 @@ export default function JobHub() {
             <div className="journal-status-row">
               <JournalField id="journal-status" label="Status" hint={journalHints.status}><select id="journal-status" aria-describedby="journal-status-hint" value={problemDraft.status} onChange={(event) => setProblemDraft({ ...problemDraft, status: event.target.value as PrepStatus, codeReview: null })}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select></JournalField>
               <JournalField id="journal-confidence" label="Confidence" hint={journalHints.confidence}><select id="journal-confidence" aria-describedby="journal-confidence-hint" value={problemDraft.confidence} onChange={(event) => setProblemDraft({ ...problemDraft, confidence: Number(event.target.value), codeReview: null })}><option value="0">Not rated</option><option value="1">1 — Cannot reproduce</option><option value="2">2 — Need notes</option><option value="3">3 — Mostly clear</option><option value="4">4 — Can re-code</option><option value="5">5 — Can explain cold</option></select></JournalField>
-              <JournalField id="journal-minutes" label="Minutes" hint={journalHints.minutes}><input id="journal-minutes" aria-describedby="journal-minutes-hint" type="number" min="0" value={problemDraft.minutes} onChange={(event) => setProblemDraft({ ...problemDraft, minutes: Number(event.target.value), codeReview: null })} /></JournalField>
+              <JournalField id="journal-minutes" label="Minutes" hint={journalHints.minutes}><input id="journal-minutes" aria-describedby="journal-minutes-hint" type="number" min="0" value={problemDraft.minutes} onChange={(event) => { const minutes = Number(event.target.value); setProblemDraft({ ...problemDraft, minutes, totalSeconds: minutes * 60, codeReview: null }); }} /></JournalField>
             </div>
             <div className={`journal-timer ${timerRunning && timerProblemId === selectedProblem.id ? "is-running" : ""}`}>
               <div className="journal-timer-clock"><span>Practice timer</span><strong>{timerProblemId === selectedProblem.id ? formatTimer(timerSeconds) : "00:00"}</strong></div>
