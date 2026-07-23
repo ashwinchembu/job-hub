@@ -10,7 +10,18 @@ export type InterviewProblem = {
   day: number;
   targetMinutes: number;
   url: string;
+  blind75: boolean;
 };
+
+export const BLIND_75_TOTAL = 75;
+
+const blind75ProblemIds = new Set([
+  1, 217, 347, 238, 128, 15, 11, 121, 39, 57, 56, 435, 252, 253, 268,
+  242, 49, 271, 125, 3, 424, 76, 5, 647, 20, 48, 54, 73, 153, 33, 206,
+  21, 141, 143, 19, 23, 226, 104, 100, 572, 102, 105, 124, 297, 235, 98,
+  230, 208, 211, 212, 295, 79, 200, 133, 417, 207, 323, 261, 269, 70, 198,
+  213, 91, 322, 152, 139, 300, 62, 55, 377, 53, 191, 338, 190, 371,
+]);
 
 const rawProblems = [
   [1, "Two Sum", "Easy", "Arrays & Hashing", "Replace the nested loop with a complement lookup."],
@@ -97,6 +108,35 @@ const rawProblems = [
   [146, "LRU Cache", "Medium", "Hash Map / Doubly Linked List", "A map finds nodes while a list preserves recency."],
   [981, "Time Based Key-Value Store", "Medium", "Hash Map / Binary Search", "Each key owns an ordered timestamp history."],
   [42, "Trapping Rain Water", "Hard", "Two Pointers / Final Mock", "Water is bounded by the smaller best wall from either side."],
+  [252, "Meeting Rooms", "Easy", "Intervals", "Sort by start time and compare each meeting with the previous end."],
+  [253, "Meeting Rooms II", "Medium", "Intervals / Heap", "Track the earliest room release while meetings arrive in start-time order."],
+  [268, "Missing Number", "Easy", "Arrays / Bit Manipulation", "Every paired value cancels when indices and values share one XOR chain."],
+  [271, "Encode and Decode Strings", "Medium", "Strings / Design", "Prefix every string with an unambiguous length before its contents."],
+  [76, "Minimum Window Substring", "Hard", "Sliding Window", "Shrink only after the window covers every required character count."],
+  [5, "Longest Palindromic Substring", "Medium", "Strings / Expand Around Center", "Every palindrome grows from either one center or a gap between two centers."],
+  [647, "Palindromic Substrings", "Medium", "Strings / Expand Around Center", "Count every successful expansion instead of retaining only the longest one."],
+  [48, "Rotate Image", "Medium", "Matrix", "Transpose the matrix, then reverse each row in place."],
+  [54, "Spiral Matrix", "Medium", "Matrix / Simulation", "Consume one boundary at a time and re-check that rows and columns remain."],
+  [73, "Set Matrix Zeroes", "Medium", "Matrix / In-place Markers", "Reuse the first row and column as marker storage without losing their original state."],
+  [141, "Linked List Cycle", "Easy", "Linked List / Fast & Slow Pointers", "A fast pointer eventually laps a slow pointer exactly when a cycle exists."],
+  [19, "Remove Nth Node From End of List", "Medium", "Linked List / Two Pointers", "Keep a fixed gap so the trailing pointer stops before the node to remove."],
+  [23, "Merge k Sorted Lists", "Hard", "Linked List / Heap", "Only the smallest current head from each list needs to compete."],
+  [572, "Subtree of Another Tree", "Easy", "Trees / DFS", "At each matching root candidate, verify the complete tree structure and values."],
+  [124, "Binary Tree Maximum Path Sum", "Hard", "Trees / DFS", "Return one usable branch upward while recording a two-branch path locally."],
+  [297, "Serialize and Deserialize Binary Tree", "Hard", "Trees / Design", "Preserve null children so traversal values reconstruct one unambiguous shape."],
+  [212, "Word Search II", "Hard", "Trie / Backtracking", "Share prefixes in a trie so one board traversal can reject many words at once."],
+  [323, "Number of Connected Components in an Undirected Graph", "Medium", "Graphs / Connectivity", "Every unvisited node starts exactly one component traversal."],
+  [261, "Graph Valid Tree", "Medium", "Graphs / Union Find", "A tree has one component, no cycle, and exactly n minus one edges."],
+  [269, "Alien Dictionary", "Hard", "Graphs / Topological Sort", "The first differing character in adjacent words creates one ordering edge."],
+  [213, "House Robber II", "Medium", "Dynamic Programming", "Break the cycle into two linear robberies that exclude opposite endpoints."],
+  [152, "Maximum Product Subarray", "Medium", "Dynamic Programming", "Track both maximum and minimum products because a negative can swap their roles."],
+  [139, "Word Break", "Medium", "Dynamic Programming", "A prefix is reachable when an earlier reachable prefix ends with a dictionary word."],
+  [377, "Combination Sum IV", "Medium", "Dynamic Programming", "Count ordered ways to build each target from smaller totals."],
+  [53, "Maximum Subarray", "Medium", "Dynamic Programming / Kadane", "At each value, choose between extending the prior subarray and starting fresh."],
+  [191, "Number of 1 Bits", "Easy", "Bit Manipulation", "Clearing the lowest set bit makes the loop run once per one-bit."],
+  [338, "Counting Bits", "Easy", "Bit Manipulation / Dynamic Programming", "Reuse the count of a smaller number after removing one known high or low bit."],
+  [190, "Reverse Bits", "Easy", "Bit Manipulation", "Move one source bit at a time into the mirrored output position."],
+  [371, "Sum of Two Integers", "Medium", "Bit Manipulation", "XOR adds without carries while AND identifies carries for the next position."],
 ] as const satisfies ReadonlyArray<readonly [number, string, ProblemDifficulty, string, string]>;
 
 export const weekThemes = [
@@ -112,6 +152,11 @@ export const weekThemes = [
   "Backtracking",
   "Dynamic Programming",
   "SQL, Backend Design & Final Mock",
+  "Blind 75: Intervals & Strings",
+  "Blind 75: Matrix & Linked Lists",
+  "Blind 75: Trees, Tries & Graphs",
+  "Blind 75: Dynamic Programming & Bits",
+  "Blind 75: Final Bit Pattern",
 ];
 
 export const interviewPlan: InterviewProblem[] = rawProblems.map(
@@ -124,6 +169,7 @@ export const interviewPlan: InterviewProblem[] = rawProblems.map(
     day: index + 1,
     week: Math.floor(index / 7) + 1,
     targetMinutes: difficulty === "Easy" ? 30 : difficulty === "Medium" ? 45 : 60,
+    blind75: blind75ProblemIds.has(id),
     url: `https://leetcode.com/problems/${title
       .toLowerCase()
       .replace(/&/g, "and")
@@ -145,6 +191,11 @@ const urlOverrides: Record<number, string> = {
   181: "employees-earning-more-than-their-managers",
   184: "department-highest-salary",
   981: "time-based-key-value-store",
+  252: "meeting-rooms",
+  253: "meeting-rooms-ii",
+  271: "encode-and-decode-strings",
+  323: "number-of-connected-components-in-an-undirected-graph",
+  269: "alien-dictionary",
 };
 
 for (const problem of interviewPlan) {
@@ -152,3 +203,15 @@ for (const problem of interviewPlan) {
     problem.url = `https://leetcode.com/problems/${urlOverrides[problem.id]}/description/`;
   }
 }
+
+const missingBlind75Problems = [...blind75ProblemIds].filter(
+  (id) => !interviewPlan.some((problem) => problem.id === id),
+);
+
+if (blind75ProblemIds.size !== BLIND_75_TOTAL || missingBlind75Problems.length > 0) {
+  throw new Error(
+    `Blind 75 coverage is invalid: ${blind75ProblemIds.size} canonical IDs, ${missingBlind75Problems.length} missing from the plan.`,
+  );
+}
+
+export const blind75CoverageCount = interviewPlan.filter((problem) => problem.blind75).length;

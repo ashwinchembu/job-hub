@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { interviewPlan, InterviewProblem, weekThemes } from "./data";
+import { BLIND_75_TOTAL, blind75CoverageCount, interviewPlan, InterviewProblem, weekThemes } from "./data";
 
 type View = "overview" | "applications" | "prep" | "data";
 type ApplicationStatus =
@@ -123,6 +123,7 @@ type ProblemProgress = {
   code: string;
   codeLanguage: string;
   codeReview: CodeReview | null;
+  hintsUsed: string[];
 };
 
 type Settings = {
@@ -135,6 +136,8 @@ const APPLICATIONS_KEY = "job-hub:applications:v1";
 const PROGRESS_KEY = "job-hub:problem-progress:v1";
 const SETTINGS_KEY = "job-hub:settings:v1";
 const SHEET_SYNC_INTERVAL_MS = 30_000;
+const HINT_PENALTY = 10;
+const LAST_PLAN_INDEX = interviewPlan.length - 1;
 
 const applicationStatuses: ApplicationStatus[] = [
   "Saved",
@@ -166,6 +169,7 @@ const emptyProgress: ProblemProgress = {
   code: "",
   codeLanguage: "",
   codeReview: null,
+  hintsUsed: [],
 };
 
 function hasReviewableInput(item: ProblemProgress) {
@@ -200,11 +204,16 @@ function normalizeStoredProgress(item?: Partial<ProblemProgress>): ProblemProgre
     optimalTimeComplexity: item?.optimalTimeComplexity || item?.complexity || "",
     optimalSpaceComplexity: item?.optimalSpaceComplexity || "",
     codeLanguage: item?.codeLanguage ? normalizeLanguage(item.codeLanguage) : "",
+    hintsUsed: Array.isArray(item?.hintsUsed) ? [...new Set(item.hintsUsed.filter((hint): hint is string => typeof hint === "string"))] : [],
   };
   const hasPastAttempt = hasReviewableInput(normalized) || normalized.minutes > 0 || Boolean(normalized.lastAttempt);
   return hasPastAttempt && normalized.status === "Not Started"
     ? { ...normalized, status: "Attempted" }
     : normalized;
+}
+
+function independenceScore(item: Pick<ProblemProgress, "hintsUsed">) {
+  return Math.max(0, 100 - item.hintsUsed.length * HINT_PENALTY);
 }
 
 function formatCoverageLabel(value: string) {
@@ -234,14 +243,34 @@ function scoreCategories(breakdown: NonNullable<CodeReview["scoreBreakdown"]>) {
   ];
 }
 
-function JournalField({ id, label, hint, className = "", children }: { id: string; label: string; hint: string; className?: string; children: ReactNode }) {
+function JournalField({
+  id,
+  label,
+  hint,
+  className = "",
+  penalizeHint = false,
+  onHintShown,
+  children,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  className?: string;
+  penalizeHint?: boolean;
+  onHintShown?: () => void;
+  children: ReactNode;
+}) {
   const [showHint, setShowHint] = useState(false);
   const hintId = `${id}-hint`;
+  const toggleHint = () => {
+    if (!showHint && penalizeHint) onHintShown?.();
+    setShowHint((open) => !open);
+  };
   return (
     <div className={`journal-field ${className}`}>
       <div className="journal-field-heading">
         <label htmlFor={id}>{label}</label>
-        <button type="button" className="journal-hint-button" aria-expanded={showHint} aria-controls={hintId} onClick={() => setShowHint((open) => !open)}>{showHint ? "Hide hint" : "Show hint"}</button>
+        <button type="button" className="journal-hint-button" aria-expanded={showHint} aria-controls={hintId} onClick={toggleHint}>{showHint ? "Hide hint" : `Show hint${penalizeHint ? ` · −${HINT_PENALTY}` : ""}`}</button>
       </div>
       {showHint && <p className="journal-hint" id={hintId}><b>Hint</b>{hint}</p>}
       {children}
@@ -596,9 +625,16 @@ export default function JobHub() {
     message: "Connecting to the project tracker…",
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const syncInFlightRef = useRef(false);
 
   const syncApplicationsFromSheet = useCallback(async (announce = false) => {
-    setSheetSync((current) => ({ ...current, status: "connecting", message: "Checking the project tracker…" }));
+    if (syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
+    setSheetSync((current) => ({
+      ...current,
+      status: current.status === "connected" && !announce ? "connected" : "connecting",
+      message: "Checking the project tracker…",
+    }));
     try {
       const response = await fetch("/api/job-tracker", { cache: "no-store" });
       const payload = await response.json();
@@ -632,6 +668,8 @@ export default function JobHub() {
         message: error instanceof Error ? error.message : "The project tracker could not be read.",
       }));
       if (announce) setToast("Workbook sync failed");
+    } finally {
+      syncInFlightRef.current = false;
     }
   }, []);
 
@@ -667,10 +705,17 @@ export default function JobHub() {
     void syncApplicationsFromSheet();
     const interval = window.setInterval(() => void syncApplicationsFromSheet(), SHEET_SYNC_INTERVAL_MS);
     const syncOnFocus = () => void syncApplicationsFromSheet();
+    const syncOnVisible = () => {
+      if (document.visibilityState === "visible") void syncApplicationsFromSheet();
+    };
     window.addEventListener("focus", syncOnFocus);
+    window.addEventListener("online", syncOnFocus);
+    document.addEventListener("visibilitychange", syncOnVisible);
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("focus", syncOnFocus);
+      window.removeEventListener("online", syncOnFocus);
+      document.removeEventListener("visibilitychange", syncOnVisible);
     };
   }, [ready, syncApplicationsFromSheet]);
 
@@ -696,7 +741,7 @@ export default function JobHub() {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
-  const planDayIndex = Math.max(0, Math.min(83, dayDifference(settings.startDate, today)));
+  const planDayIndex = Math.max(0, Math.min(LAST_PLAN_INDEX, dayDifference(settings.startDate, today)));
   const todayProblem = interviewPlan[planDayIndex];
   const currentWeek = todayProblem.week;
 
@@ -771,6 +816,31 @@ export default function JobHub() {
       codeLanguage: normalizeLanguage(normalized.codeLanguage || settings.primaryLanguage),
     });
     setReviewError("");
+  }
+
+  function recordHintUse(hintId: string) {
+    if (!selectedProblem || problemDraft.hintsUsed.includes(hintId)) return;
+    const problemKey = String(selectedProblem.id);
+    const updatedDraft: ProblemProgress = {
+      ...problemDraft,
+      hintsUsed: [...problemDraft.hintsUsed, hintId],
+      status: problemDraft.status === "Not Started" ? "Attempted" : problemDraft.status,
+      lastAttempt: today,
+    };
+    setProblemDraft(updatedDraft);
+    setProgress((items) => {
+      const saved = normalizeStoredProgress(items[problemKey]);
+      if (saved.hintsUsed.includes(hintId)) return items;
+      return {
+        ...items,
+        [problemKey]: {
+          ...saved,
+          hintsUsed: [...saved.hintsUsed, hintId],
+          status: saved.status === "Not Started" ? "Attempted" : saved.status,
+          lastAttempt: today,
+        },
+      };
+    });
   }
 
   function saveProblemJournal() {
@@ -979,13 +1049,13 @@ export default function JobHub() {
   function moveFocusCarousel(step: -1 | 1) {
     setFocusSlideDirection(step > 0 ? "forward" : "back");
     setFocusDayOffset((current) => {
-      const normalized = Math.max(0, Math.min(83 - planDayIndex, current));
-      return Math.max(0, Math.min(83 - planDayIndex, normalized + step));
+      const normalized = Math.max(0, Math.min(LAST_PLAN_INDEX - planDayIndex, current));
+      return Math.max(0, Math.min(LAST_PLAN_INDEX - planDayIndex, normalized + step));
     });
   }
 
   function renderOverview() {
-    const focusProblemIndex = Math.max(planDayIndex, Math.min(83, planDayIndex + focusDayOffset));
+    const focusProblemIndex = Math.max(planDayIndex, Math.min(LAST_PLAN_INDEX, planDayIndex + focusDayOffset));
     const focusProblem = interviewPlan[focusProblemIndex];
     const focusOffset = focusProblemIndex - planDayIndex;
     const focusProgress = progress[String(focusProblem.id)] ?? emptyProgress;
@@ -996,6 +1066,8 @@ export default function JobHub() {
     const focusScheduledDate = addDays(settings.startDate, focusProblem.day - 1);
     const focusDayLabel = focusOffset === 0 ? "Today" : focusOffset === 1 ? "Tomorrow" : `In ${focusOffset} days`;
     const focusDateLabel = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(new Date(`${focusScheduledDate}T12:00:00`));
+    const currentWeekProblems = interviewPlan.filter((problem) => problem.week === currentWeek);
+    const currentWeekSolved = currentWeekProblems.filter((problem) => ["Solved with Hint", "Solved Independently"].includes(progress[String(problem.id)]?.status)).length;
     const nextMoves = applications
       .filter(
         (application) =>
@@ -1027,7 +1099,7 @@ export default function JobHub() {
           <article className="metric-card"><span>Active pipeline</span><strong>{activeApplications.length}</strong><small>{appliedCount} applied or beyond</small></article>
           <article className="metric-card"><span>Interviews</span><strong>{interviewCount}</strong><small>{offerCount} offers</small></article>
           <article className={`metric-card ${dueApplications.length ? "metric-alert" : ""}`}><span>Follow-ups due</span><strong>{dueApplications.length}</strong><small>{dueApplications.length ? "Needs attention today" : "You are caught up"}</small></article>
-          <article className="metric-card"><span>Prep complete</span><strong>{solvedCount}<em>/84</em></strong><small>{totalPrepMinutes} minutes logged</small></article>
+          <article className="metric-card"><span>Prep complete</span><strong>{solvedCount}<em>/{interviewPlan.length}</em></strong><small>{BLIND_75_TOTAL}/{BLIND_75_TOTAL} Blind 75 included</small></article>
         </section>
 
         <section className="overview-grid">
@@ -1036,7 +1108,7 @@ export default function JobHub() {
             <div className={`focus-card-content slide-${focusSlideDirection}`} key={focusProblem.id} aria-live="polite">
               <div className="card-heading-row">
                 <div><p className="eyebrow">{focusDayLabel} · {focusDateLabel} · Day {focusProblem.day}</p><h2>{focusProblem.title}</h2></div>
-                <div className="focus-badges"><span className={`progress-state progress-${focusProgress.status.toLowerCase().replaceAll(" ", "-")}`}>{focusProgress.status}</span><span className={`difficulty difficulty-${focusProblem.difficulty.toLowerCase()}`}>{focusProblem.difficulty}</span></div>
+                <div className="focus-badges"><span className={`progress-state progress-${focusProgress.status.toLowerCase().replaceAll(" ", "-")}`}>{focusProgress.status}</span>{focusProblem.blind75 && <span className="blind75-badge">Blind 75</span>}<span className={`difficulty difficulty-${focusProblem.difficulty.toLowerCase()}`}>{focusProblem.difficulty}</span></div>
               </div>
               <p className="pattern-label">{focusProblem.pattern}</p>
               <p className="focus-cue">“{focusProblem.cue}”</p>
@@ -1097,8 +1169,8 @@ export default function JobHub() {
 
           <article className="list-card">
             <div className="card-heading-row"><div><p className="eyebrow">Week {currentWeek}</p><h2>{weekThemes[currentWeek - 1]}</h2></div><button className="text-button" onClick={() => setView("prep")}>Full plan →</button></div>
-            <div className="week-progress-row"><div><span style={{ width: `${Math.min(100, (interviewPlan.filter((problem) => problem.week === currentWeek && ["Solved with Hint", "Solved Independently"].includes(progress[String(problem.id)]?.status)).length / 7) * 100)}%` }} /></div><strong>{interviewPlan.filter((problem) => problem.week === currentWeek && ["Solved with Hint", "Solved Independently"].includes(progress[String(problem.id)]?.status)).length}/7</strong></div>
-            {interviewPlan.filter((problem) => problem.week === currentWeek).slice(0, 4).map((problem) => (
+            <div className="week-progress-row"><div><span style={{ width: `${Math.min(100, (currentWeekSolved / currentWeekProblems.length) * 100)}%` }} /></div><strong>{currentWeekSolved}/{currentWeekProblems.length}</strong></div>
+            {currentWeekProblems.slice(0, 4).map((problem) => (
               <button className="mini-problem-row" key={problem.id} onClick={() => openProblem(problem)}>
                 <span className={`problem-check ${progress[String(problem.id)]?.status?.startsWith("Solved") ? "is-complete" : ""}`}>{progress[String(problem.id)]?.status?.startsWith("Solved") ? "✓" : problem.day}</span>
                 <span><strong>{problem.title}</strong><small>{problem.pattern}</small></span>
@@ -1115,7 +1187,7 @@ export default function JobHub() {
     return (
       <>
         <section className="page-heading">
-          <div><p className="eyebrow">Application pipeline</p><h1>Every role. One next move.</h1><p>The Applications sheet is the source of truth. Job Hub checks it every 30 seconds and whenever you return to this window.</p></div>
+          <div><p className="eyebrow">Application pipeline</p><h1>Every role. One next move.</h1><p>The Applications sheet is the source of truth. Job Hub checks it every 30 seconds, when this tab becomes visible, and when your connection returns.</p></div>
           <button className="primary-button" onClick={openNewApplication}>+ Add application</button>
         </section>
         <div className={`sheet-sync-banner sync-${sheetSync.status}`}>
@@ -1124,7 +1196,7 @@ export default function JobHub() {
             <b>{sheetSync.status === "connected" ? `${sheetSync.rowCount} applications synced` : sheetSync.status === "connecting" ? "Syncing applications" : "Workbook sync needs attention"}</b>
             <small>
               {sheetSync.status === "connected"
-                ? `${sheetSync.workbook} · workbook updated ${formatSyncTime(sheetSync.modifiedAt)}`
+                ? `${sheetSync.workbook} · checked ${formatSyncTime(sheetSync.checkedAt)} · workbook updated ${formatSyncTime(sheetSync.modifiedAt)} · auto-refresh every 30 seconds`
                 : sheetSync.message}
             </small>
           </span>
@@ -1162,12 +1234,13 @@ export default function JobHub() {
     return (
       <>
         <section className="page-heading prep-heading">
-          <div><p className="eyebrow">84-day interview plan</p><h1>Practice with a reason.</h1><p>Each problem is tied to the full-stack, backend, AI/data, and forward-deployed work in your target roles.</p></div>
-          <div className="prep-summary"><strong>{solvedCount}/84</strong><span>problems complete</span><small>{totalPrepMinutes} minutes logged</small></div>
+          <div><p className="eyebrow">{interviewPlan.length}-day interview plan</p><h1>Practice with a reason.</h1><p>The full Blind 75 is included alongside SQL, backend-design, graph, and role-specific practice for your target jobs.</p></div>
+          <div className="prep-summary"><strong>{solvedCount}/{interviewPlan.length}</strong><span>problems complete</span><small>{totalPrepMinutes} minutes logged</small></div>
         </section>
         <section className="prep-controls">
           <label>Plan start<input type="date" value={settings.startDate} onChange={(event) => setSettings({ ...settings, startDate: event.target.value })} /></label>
           <label>Primary language<select value={settings.primaryLanguage} onChange={(event) => setSettings({ ...settings, primaryLanguage: event.target.value })}><option>Python 3</option><option>TypeScript</option><option>Java</option><option>C++</option></select></label>
+          <div className="blind75-coverage"><strong>{blind75CoverageCount}/{BLIND_75_TOTAL}</strong><span>Blind 75 included</span></div>
           <div className="privacy-note">Notes and progress stay on this device.</div>
         </section>
         <div className="week-tabs" role="tablist" aria-label="Interview plan weeks">
@@ -1175,7 +1248,7 @@ export default function JobHub() {
         </div>
         <section className="week-hero">
           <div><p className="eyebrow">Week {prepWeek}</p><h2>{weekThemes[prepWeek - 1]}</h2><p>{prepWeek <= 2 ? "Build fast recognition and clean loop invariants." : prepWeek <= 6 ? "Strengthen traversal, state, and boundary reasoning." : prepWeek <= 9 ? "Model connected systems, priority, and dependencies." : "Turn patterns into interview-ready explanations."}</p></div>
-          <div className="week-ring" style={{ "--progress": `${(completedInWeek / 7) * 360}deg` } as React.CSSProperties}><span><strong>{completedInWeek}</strong>/7</span></div>
+          <div className="week-ring" style={{ "--progress": `${(completedInWeek / weekProblems.length) * 360}deg` } as React.CSSProperties}><span><strong>{completedInWeek}</strong>/{weekProblems.length}</span></div>
         </section>
         <section className="problem-list">
           {weekProblems.map((problem) => {
@@ -1185,7 +1258,7 @@ export default function JobHub() {
             return (
               <article className={`problem-row ${problem.id === todayProblem.id ? "is-today" : ""}`} key={problem.id}>
                 <div className={`problem-number ${item.status.startsWith("Solved") ? "complete" : ""}`}>{item.status.startsWith("Solved") ? "✓" : problem.day}</div>
-                <div className="problem-info"><div><strong>{problem.title}</strong>{problem.id === todayProblem.id && <span className="today-badge">Today</span>}</div><small>{problem.pattern} · {formatHumanDate(scheduledDate)}</small><p>{problem.cue}</p></div>
+                <div className="problem-info"><div><strong>{problem.title}</strong>{problem.id === todayProblem.id && <span className="today-badge">Today</span>}{problem.blind75 && <span className="blind75-badge">Blind 75</span>}</div><small>{problem.pattern} · {formatHumanDate(scheduledDate)}</small><p>{problem.cue}</p></div>
                 <span className={`difficulty difficulty-${problem.difficulty.toLowerCase()}`}>{problem.difficulty}</span>
                 <span className="target-time">{problem.targetMinutes} min</span>
                 <select aria-label={`${problem.title} status`} value={item.status} onChange={(event) => quickUpdateProblem(problem, event.target.value as PrepStatus)}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select>
@@ -1205,7 +1278,7 @@ export default function JobHub() {
         <section className="data-grid">
           <article className="data-card featured"><div className="data-icon">↓</div><div><h2>Export a backup</h2><p>Download applications, coding progress, journals, and settings as one JSON file.</p><button className="primary-button" onClick={exportBackup}>Download backup</button></div></article>
           <article className="data-card"><div className="data-icon">↑</div><div><h2>Import data</h2><p>Restore a Job Hub JSON backup, or import an Applications CSV from your spreadsheet.</p><button className="secondary-button" onClick={() => fileInputRef.current?.click()}>Choose JSON or CSV</button></div></article>
-          <article className="data-card"><div className="data-icon">↻</div><div><h2>Workbook connection</h2><p>{sheetSync.status === "connected" ? `${sheetSync.rowCount} rows connected from ${sheetSync.workbook}.` : sheetSync.message}</p><button className="secondary-button" disabled={sheetSync.status === "connecting"} onClick={() => void syncApplicationsFromSheet(true)}>Sync applications now</button></div></article>
+          <article className="data-card"><div className="data-icon">↻</div><div><h2>Workbook connection</h2><p>{sheetSync.status === "connected" ? `${sheetSync.rowCount} rows connected from ${sheetSync.workbook}. Last checked ${formatSyncTime(sheetSync.checkedAt)}; auto-refresh runs every 30 seconds.` : sheetSync.message}</p><button className="secondary-button" disabled={sheetSync.status === "connecting"} onClick={() => void syncApplicationsFromSheet(true)}>Sync applications now</button></div></article>
           <article className="data-card"><div className="data-icon">↺</div><div><h2>Restore demo</h2><p>Bring back three clearly labeled sample applications and reset the coding plan.</p><button className="secondary-button" onClick={resetDemo}>Restore demo data</button></div></article>
           <article className="data-card danger-card"><div className="data-icon">×</div><div><h2>Clear local data</h2><p>Remove all applications and prep journals saved in this browser. This cannot be undone.</p><button className="danger-button" onClick={clearAll}>Clear everything</button></div></article>
         </section>
@@ -1216,6 +1289,7 @@ export default function JobHub() {
 
   if (!ready) return <div className="app-loading">Opening Job Hub…</div>;
   const journalHints = getJournalHints(selectedProblem ?? todayProblem);
+  const currentIndependenceScore = independenceScore(problemDraft);
 
   return (
     <div className="app-shell">
@@ -1291,35 +1365,40 @@ export default function JobHub() {
               )}
             </div>
             <div className="journal-grid">
-              <JournalField id="brute-force-approach" className="journal-wide" label="My brute-force approach" hint={journalHints.bruteForceApproach}><textarea id="brute-force-approach" aria-describedby="brute-force-approach-hint" rows={4} value={problemDraft.naiveApproach} onChange={(event) => setProblemDraft({ ...problemDraft, naiveApproach: event.target.value, codeReview: null })} placeholder="What would the brute-force solution do, step by step?" /></JournalField>
-              <JournalField id="brute-force-time" label="Brute-force time complexity" hint={journalHints.bruteForceTime}><textarea id="brute-force-time" aria-describedby="brute-force-time-hint" rows={2} value={problemDraft.bruteForceTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n²), because…" /></JournalField>
-              <JournalField id="brute-force-space" label="Brute-force space complexity" hint={journalHints.bruteForceSpace}><textarea id="brute-force-space" aria-describedby="brute-force-space-hint" rows={2} value={problemDraft.bruteForceSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceSpaceComplexity: event.target.value, codeReview: null })} placeholder="Example: O(1) auxiliary space, because…" /></JournalField>
-              <JournalField id="journal-invariant" className="journal-wide" label="Key invariant / decision rule" hint={journalHints.invariant}><textarea id="journal-invariant" aria-describedby="journal-invariant-hint" rows={4} value={problemDraft.invariant} onChange={(event) => setProblemDraft({ ...problemDraft, invariant: event.target.value, codeReview: null })} placeholder="What stays true after every step, and why is each choice safe?" /></JournalField>
-              <JournalField id="optimal-steps" className="journal-wide" label="Optimal algorithm steps" hint={journalHints.optimalSteps}><textarea id="optimal-steps" aria-describedby="optimal-steps-hint" rows={5} value={problemDraft.solutionSteps} onChange={(event) => setProblemDraft({ ...problemDraft, solutionSteps: event.target.value, codeReview: null })} placeholder="Write the optimized algorithm step by step in plain English." /></JournalField>
-              <JournalField id="optimal-time" label="Optimal time complexity" hint={journalHints.optimalTime}><textarea id="optimal-time" aria-describedby="optimal-time-hint" rows={2} value={problemDraft.optimalTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n), because each item…" /></JournalField>
-              <JournalField id="optimal-space" label="Optimal space complexity" hint={journalHints.optimalSpace}><textarea id="optimal-space" aria-describedby="optimal-space-hint" rows={2} value={problemDraft.optimalSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalSpaceComplexity: event.target.value, codeReview: null })} placeholder="State auxiliary space and explain it." /></JournalField>
-              <JournalField id="edge-cases" label="Edge cases & tests" hint={journalHints.edgeCases}><textarea id="edge-cases" aria-describedby="edge-cases-hint" rows={3} value={problemDraft.edgeCases} onChange={(event) => setProblemDraft({ ...problemDraft, edgeCases: event.target.value, codeReview: null })} placeholder="Empty, duplicates, boundaries…" /></JournalField>
-              <JournalField id="mistakes" label="Mistakes / bug cause" hint={journalHints.mistakes}><textarea id="mistakes" aria-describedby="mistakes-hint" rows={3} value={problemDraft.mistakes} onChange={(event) => setProblemDraft({ ...problemDraft, mistakes: event.target.value, codeReview: null })} placeholder="What went wrong and why?" /></JournalField>
-              <JournalField id="interview-explanation" className="journal-wide" label="Interview explanation (about 60 seconds)" hint={journalHints.explanation}><textarea id="interview-explanation" aria-describedby="interview-explanation-hint" rows={4} value={problemDraft.explanation} onChange={(event) => setProblemDraft({ ...problemDraft, explanation: event.target.value, codeReview: null })} placeholder="Write what you would actually say aloud to the interviewer in about 60 seconds." /></JournalField>
+              <JournalField id="brute-force-approach" className="journal-wide" label="My brute-force approach" hint={journalHints.bruteForceApproach} penalizeHint onHintShown={() => recordHintUse("brute-force-approach")}><textarea id="brute-force-approach" aria-describedby="brute-force-approach-hint" rows={4} value={problemDraft.naiveApproach} onChange={(event) => setProblemDraft({ ...problemDraft, naiveApproach: event.target.value, codeReview: null })} placeholder="What would the brute-force solution do, step by step?" /></JournalField>
+              <JournalField id="brute-force-time" label="Brute-force time complexity" hint={journalHints.bruteForceTime} penalizeHint onHintShown={() => recordHintUse("brute-force-time")}><textarea id="brute-force-time" aria-describedby="brute-force-time-hint" rows={2} value={problemDraft.bruteForceTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n²), because…" /></JournalField>
+              <JournalField id="brute-force-space" label="Brute-force space complexity" hint={journalHints.bruteForceSpace} penalizeHint onHintShown={() => recordHintUse("brute-force-space")}><textarea id="brute-force-space" aria-describedby="brute-force-space-hint" rows={2} value={problemDraft.bruteForceSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceSpaceComplexity: event.target.value, codeReview: null })} placeholder="Example: O(1) auxiliary space, because…" /></JournalField>
+              <JournalField id="journal-invariant" className="journal-wide" label="Key invariant / decision rule" hint={journalHints.invariant} penalizeHint onHintShown={() => recordHintUse("journal-invariant")}><textarea id="journal-invariant" aria-describedby="journal-invariant-hint" rows={4} value={problemDraft.invariant} onChange={(event) => setProblemDraft({ ...problemDraft, invariant: event.target.value, codeReview: null })} placeholder="What stays true after every step, and why is each choice safe?" /></JournalField>
+              <JournalField id="optimal-steps" className="journal-wide" label="Optimal algorithm steps" hint={journalHints.optimalSteps} penalizeHint onHintShown={() => recordHintUse("optimal-steps")}><textarea id="optimal-steps" aria-describedby="optimal-steps-hint" rows={5} value={problemDraft.solutionSteps} onChange={(event) => setProblemDraft({ ...problemDraft, solutionSteps: event.target.value, codeReview: null })} placeholder="Write the optimized algorithm step by step in plain English." /></JournalField>
+              <JournalField id="optimal-time" label="Optimal time complexity" hint={journalHints.optimalTime} penalizeHint onHintShown={() => recordHintUse("optimal-time")}><textarea id="optimal-time" aria-describedby="optimal-time-hint" rows={2} value={problemDraft.optimalTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n), because each item…" /></JournalField>
+              <JournalField id="optimal-space" label="Optimal space complexity" hint={journalHints.optimalSpace} penalizeHint onHintShown={() => recordHintUse("optimal-space")}><textarea id="optimal-space" aria-describedby="optimal-space-hint" rows={2} value={problemDraft.optimalSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalSpaceComplexity: event.target.value, codeReview: null })} placeholder="State auxiliary space and explain it." /></JournalField>
+              <JournalField id="edge-cases" label="Edge cases & tests" hint={journalHints.edgeCases} penalizeHint onHintShown={() => recordHintUse("edge-cases")}><textarea id="edge-cases" aria-describedby="edge-cases-hint" rows={3} value={problemDraft.edgeCases} onChange={(event) => setProblemDraft({ ...problemDraft, edgeCases: event.target.value, codeReview: null })} placeholder="Empty, duplicates, boundaries…" /></JournalField>
+              <JournalField id="mistakes" label="Mistakes / bug cause" hint={journalHints.mistakes} penalizeHint onHintShown={() => recordHintUse("mistakes")}><textarea id="mistakes" aria-describedby="mistakes-hint" rows={3} value={problemDraft.mistakes} onChange={(event) => setProblemDraft({ ...problemDraft, mistakes: event.target.value, codeReview: null })} placeholder="What went wrong and why?" /></JournalField>
+              <JournalField id="interview-explanation" className="journal-wide" label="Interview explanation (about 60 seconds)" hint={journalHints.explanation} penalizeHint onHintShown={() => recordHintUse("interview-explanation")}><textarea id="interview-explanation" aria-describedby="interview-explanation-hint" rows={4} value={problemDraft.explanation} onChange={(event) => setProblemDraft({ ...problemDraft, explanation: event.target.value, codeReview: null })} placeholder="Write what you would actually say aloud to the interviewer in about 60 seconds." /></JournalField>
             </div>
             <section className="code-review-lab" aria-labelledby="code-review-heading">
               <div className="code-review-heading">
                 <div><p className="eyebrow">AI submission coach</p><h3 id="code-review-heading">Score your full {problemDraft.codeLanguage || settings.primaryLanguage} submission.</h3><p>AI reviews your brute force, optimal algorithm, all four complexity answers, spoken explanation, and code as separate evidence.</p></div>
                 <span className="online-badge"><i />Online research</span>
               </div>
+              <div className="independence-panel">
+                <div><p className="eyebrow">Independent work score</p><strong>Hints and final submission are scored separately.</strong><span>Each unique solution hint costs {HINT_PENALTY} points. Reopening the same hint does not cost more.</span></div>
+                <div className="independence-value"><strong>{currentIndependenceScore}</strong><span>/100</span><small>{problemDraft.hintsUsed.length} hint{problemDraft.hintsUsed.length === 1 ? "" : "s"} used</small></div>
+              </div>
               <div className="code-review-controls">
                 <label>Language<select value={problemDraft.codeLanguage || settings.primaryLanguage} onChange={(event) => setProblemDraft({ ...problemDraft, codeLanguage: event.target.value, codeReview: null })}><option>Python 3</option><option>TypeScript</option><option>JavaScript</option><option>Java</option><option>C++</option><option>C#</option><option>Go</option><option>Rust</option><option>Swift</option><option>Kotlin</option></select></label>
                 <span>Your code and journal answers are sent to OpenAI only when you request a review.</span>
                 <button className="review-button" disabled={reviewRunning || !hasReviewableInput(problemDraft)} onClick={() => void evaluateCode()}>{reviewRunning ? "Scoring your work…" : problemDraft.codeReview ? "Score again" : "Score all my work"}</button>
               </div>
-              <JournalField id="solution-code" className="code-input-label" label={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution`} hint={journalHints.code}><textarea id="solution-code" aria-describedby="solution-code-hint" className="code-input" rows={14} spellCheck={false} value={problemDraft.code} onChange={(event) => setProblemDraft({ ...problemDraft, code: event.target.value, codeReview: null })} placeholder={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution here…`} /></JournalField>
+              <JournalField id="solution-code" className="code-input-label" label={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution`} hint={journalHints.code} penalizeHint onHintShown={() => recordHintUse("solution-code")}><textarea id="solution-code" aria-describedby="solution-code-hint" className="code-input" rows={14} spellCheck={false} value={problemDraft.code} onChange={(event) => setProblemDraft({ ...problemDraft, code: event.target.value, codeReview: null })} placeholder={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution here…`} /></JournalField>
               {reviewRunning && <div className="review-loading" role="status"><span /><div><strong>Checking your code, reasoning, and explanation…</strong><small>This usually takes under a minute.</small></div></div>}
               {reviewError && <div className="review-error" role="alert"><strong>Review could not run</strong><span>{reviewError}</span><small>Your journal stays saved in this browser. If the connection message repeats, confirm Job Hub is still running locally and refresh.</small></div>}
               {problemDraft.codeReview && (
                 <div className="review-result">
                   <div className="review-score-row">
                     <div className={`verdict-badge verdict-${problemDraft.codeReview.verdict.toLowerCase().replaceAll(" ", "-")}`}>{problemDraft.codeReview.verdict}</div>
-                    <div className="review-score"><strong>{problemDraft.codeReview.score}</strong><span>/100</span></div>
+                    <div className="review-score"><small>Final submission</small><div><strong>{problemDraft.codeReview.score}</strong><span>/100</span></div></div>
+                    <div className="review-score independence-result"><small>Independence</small><div><strong>{currentIndependenceScore}</strong><span>/100</span></div></div>
                     <div><strong>{problemDraft.codeReview.summary}</strong><small>Reviewed {formatSyncTime(problemDraft.codeReview.reviewedAt)} · {problemDraft.codeReview.model}</small></div>
                   </div>
                   {problemDraft.codeReview.scoreBreakdown && (
@@ -1362,7 +1441,7 @@ export default function JobHub() {
                   {problemDraft.codeReview.hints && problemDraft.codeReview.hints.length > 0 && (
                     <div className="hint-section">
                       <div className="review-section-title"><p className="eyebrow">Progressive hints</p><h4>Reveal only as much as you need</h4></div>
-                      <div className="hint-ladder">{problemDraft.codeReview.hints.map((hint, index) => <details key={`${hint.level}-${index}`} open={index === 0}><summary><span>{index + 1}</span><strong>{hint.level}</strong><small>{index === 0 ? "Start here" : "Open if still stuck"}</small></summary><p>{hint.text}</p></details>)}</div>
+                      <div className="hint-ladder">{problemDraft.codeReview.hints.map((hint, index) => <details key={`${hint.level}-${index}`} onToggle={(event) => event.currentTarget.open && recordHintUse(`ai-review-hint-${index}`)}><summary><span>{index + 1}</span><strong>{hint.level}</strong><small>Reveal · −{HINT_PENALTY} independence</small></summary><p>{hint.text}</p></details>)}</div>
                     </div>
                   )}
                   {problemDraft.codeReview.sources.length > 0 && <div className="review-sources"><span>References checked</span>{problemDraft.codeReview.sources.map((source) => <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>{source.title} ↗</a>)}</div>}
