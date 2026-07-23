@@ -35,3 +35,10 @@ test("application sync covers interval, visibility, focus, and reconnect", () =>
   assert.match(hubSource, /addEventListener\("online"/);
   assert.match(hubSource, /addEventListener\("visibilitychange"/);
 });
+
+test("practice and sync timing retain second precision", () => {
+  assert.match(hubSource, /Time logged \(seconds\)/);
+  assert.match(hubSource, /second: "2-digit"/);
+  assert.match(hubSource, /safeSeconds % 60/);
+  assert.match(hubSource, /totalSeconds: updatedSeconds/);
+});

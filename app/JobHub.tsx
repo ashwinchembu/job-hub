@@ -471,6 +471,7 @@ function formatSyncTime(value: string) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    second: "2-digit",
   }).format(date);
 }
 
@@ -592,7 +593,13 @@ function normalizeStatus(value: string): ApplicationStatus {
 }
 
 function formatTimer(seconds: number) {
-  return `${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}`;
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const remainingSeconds = safeSeconds % 60;
+  return hours > 0
+    ? `${pad(hours)}:${pad(minutes)}:${pad(remainingSeconds)}`
+    : `${pad(minutes)}:${pad(remainingSeconds)}`;
 }
 
 export default function JobHub() {
@@ -774,7 +781,10 @@ export default function JobHub() {
   const solvedCount = Object.values(progress).filter((item) =>
     ["Solved with Hint", "Solved Independently"].includes(item.status),
   ).length;
-  const totalPrepMinutes = Object.values(progress).reduce((sum, item) => sum + (item.minutes || 0), 0);
+  const totalPrepSeconds = Object.values(progress).reduce(
+    (sum, item) => sum + (item.totalSeconds || (item.minutes || 0) * 60),
+    0,
+  );
   const interviewCount = applications.filter((item) => item.status === "Interviewing").length;
   const appliedCount = applications.filter((item) => ["Applied", "Interviewing", "Offer"].includes(item.status)).length;
   const offerCount = applications.filter((item) => item.status === "Offer").length;
@@ -1235,7 +1245,7 @@ export default function JobHub() {
       <>
         <section className="page-heading prep-heading">
           <div><p className="eyebrow">{interviewPlan.length}-day interview plan</p><h1>Practice with a reason.</h1><p>The full Blind 75 is included alongside SQL, backend-design, graph, and role-specific practice for your target jobs.</p></div>
-          <div className="prep-summary"><strong>{solvedCount}/{interviewPlan.length}</strong><span>problems complete</span><small>{totalPrepMinutes} minutes logged</small></div>
+          <div className="prep-summary"><strong>{solvedCount}/{interviewPlan.length}</strong><span>problems complete</span><small>{formatTimer(totalPrepSeconds)} logged to the second</small></div>
         </section>
         <section className="prep-controls">
           <label>Plan start<input type="date" value={settings.startDate} onChange={(event) => setSettings({ ...settings, startDate: event.target.value })} /></label>
@@ -1353,11 +1363,11 @@ export default function JobHub() {
             <div className="journal-status-row">
               <JournalField id="journal-status" label="Status" hint={journalHints.status}><select id="journal-status" aria-describedby="journal-status-hint" value={problemDraft.status} onChange={(event) => setProblemDraft({ ...problemDraft, status: event.target.value as PrepStatus, codeReview: null })}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select></JournalField>
               <JournalField id="journal-confidence" label="Confidence" hint={journalHints.confidence}><select id="journal-confidence" aria-describedby="journal-confidence-hint" value={problemDraft.confidence} onChange={(event) => setProblemDraft({ ...problemDraft, confidence: Number(event.target.value), codeReview: null })}><option value="0">Not rated</option><option value="1">1 — Cannot reproduce</option><option value="2">2 — Need notes</option><option value="3">3 — Mostly clear</option><option value="4">4 — Can re-code</option><option value="5">5 — Can explain cold</option></select></JournalField>
-              <JournalField id="journal-minutes" label="Minutes" hint={journalHints.minutes}><input id="journal-minutes" aria-describedby="journal-minutes-hint" type="number" min="0" value={problemDraft.minutes} onChange={(event) => { const minutes = Number(event.target.value); setProblemDraft({ ...problemDraft, minutes, totalSeconds: minutes * 60, codeReview: null }); }} /></JournalField>
+              <JournalField id="journal-seconds" label="Time logged (seconds)" hint={journalHints.minutes}><div className="precise-time-control"><input id="journal-seconds" aria-describedby="journal-seconds-hint journal-time-preview" type="number" min="0" step="1" value={problemDraft.totalSeconds || problemDraft.minutes * 60} onChange={(event) => { const seconds = Math.max(0, Math.floor(Number(event.target.value) || 0)); setProblemDraft({ ...problemDraft, minutes: Math.ceil(seconds / 60), totalSeconds: seconds, codeReview: null }); }} /><small id="journal-time-preview">{formatTimer(problemDraft.totalSeconds || problemDraft.minutes * 60)}</small></div></JournalField>
             </div>
             <div className={`journal-timer ${timerRunning && timerProblemId === selectedProblem.id ? "is-running" : ""}`}>
-              <div className="journal-timer-clock"><span>Practice timer</span><strong>{timerProblemId === selectedProblem.id ? formatTimer(timerSeconds) : "00:00"}</strong></div>
-              <p>{timerRunning && timerProblemId === selectedProblem.id ? "Timing this attempt now. Stop when you finish to add it to Minutes." : "Start here and keep the journal open while you solve. Time is saved when you stop."}</p>
+              <div className="journal-timer-clock"><span>Total practice time</span><strong>{formatTimer((problemDraft.totalSeconds || problemDraft.minutes * 60) + (timerRunning && timerProblemId === selectedProblem.id ? timerSeconds : 0))}</strong></div>
+              <p>{timerRunning && timerProblemId === selectedProblem.id ? "Timing this attempt to the second. Stop when you finish to save the exact duration." : "Start here and keep the journal open while you solve. Every elapsed second is saved when you stop."}</p>
               {!timerRunning || timerProblemId !== selectedProblem.id ? (
                 <button type="button" className="journal-timer-button" onClick={() => startTimer(selectedProblem)}>▶ Start timer</button>
               ) : (

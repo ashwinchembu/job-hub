@@ -1642,8 +1642,28 @@ textarea:focus-visible {
 .journal-status-row {
   padding: 18px 26px 0;
   display: grid;
-  grid-template-columns: 1fr 1.5fr 110px;
+  grid-template-columns: 1fr 1.5fr 170px;
   gap: 14px;
+}
+
+.precise-time-control {
+  position: relative;
+}
+
+.precise-time-control input {
+  padding-right: 62px;
+}
+
+.precise-time-control small {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  color: var(--green);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  font-weight: 800;
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .journal-timer {
