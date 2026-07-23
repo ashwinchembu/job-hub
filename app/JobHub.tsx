@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { interviewPlan, InterviewProblem, weekThemes } from "./data";
 
 type View = "overview" | "applications" | "prep" | "data";
@@ -229,6 +229,21 @@ function scoreCategories(breakdown: NonNullable<CodeReview["scoreBreakdown"]>) {
     { label: "Edge-case coverage", weight: "10%", score: breakdown.edgeCaseCoverage },
     { label: "Explanation quality", weight: "20%", score: breakdown.explanationQuality },
   ];
+}
+
+function JournalField({ id, label, hint, className = "", children }: { id: string; label: string; hint: string; className?: string; children: ReactNode }) {
+  const [showHint, setShowHint] = useState(false);
+  const hintId = `${id}-hint`;
+  return (
+    <div className={`journal-field ${className}`}>
+      <div className="journal-field-heading">
+        <label htmlFor={id}>{label}</label>
+        <button type="button" className="journal-hint-button" aria-expanded={showHint} aria-controls={hintId} onClick={() => setShowHint((open) => !open)}>{showHint ? "Hide hint" : "Hint"}</button>
+      </div>
+      {showHint && <p className="journal-hint" id={hintId}><b>Hint</b>{hint}</p>}
+      {children}
+    </div>
+  );
 }
 
 function pad(value: number) {
@@ -667,7 +682,9 @@ export default function JobHub() {
       setProgress((items) => ({ ...items, [String(selectedProblem.id)]: updated }));
       showToast("AI code and explanation review saved");
     } catch (error) {
-      setReviewError(error instanceof Error ? error.message : "The AI review could not be completed.");
+      const message = error instanceof Error ? error.message : "The AI review could not be completed.";
+      const connectionLost = error instanceof TypeError && /fetch|network|load/i.test(message);
+      setReviewError(connectionLost ? "Job Hub lost its connection to the local AI service. Refresh the page and try the review again." : message);
     } finally {
       setReviewRunning(false);
     }
@@ -1096,9 +1113,9 @@ export default function JobHub() {
             <div className="modal-header"><div><p className="eyebrow">Day {selectedProblem.day} · Week {selectedProblem.week}</p><h2 id="journal-title">{selectedProblem.title}</h2><p>{selectedProblem.pattern} · {selectedProblem.targetMinutes} minute target</p></div><button className="close-button" onClick={() => setSelectedProblem(null)} aria-label="Close">×</button></div>
             <div className="journal-callout"><strong>Recognition cue</strong><span>{selectedProblem.cue}</span><a href={selectedProblem.url} target="_blank" rel="noreferrer">Open LeetCode ↗</a></div>
             <div className="journal-status-row">
-              <label>Status <small className="journal-hint"><b>Hint</b> Use Attempted until you can complete the solution.</small><select value={problemDraft.status} onChange={(event) => setProblemDraft({ ...problemDraft, status: event.target.value as PrepStatus, codeReview: null })}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select></label>
-              <label>Confidence <small className="journal-hint"><b>Hint</b> Rate whether you could reproduce and explain it tomorrow without notes.</small><select value={problemDraft.confidence} onChange={(event) => setProblemDraft({ ...problemDraft, confidence: Number(event.target.value), codeReview: null })}><option value="0">Not rated</option><option value="1">1 — Cannot reproduce</option><option value="2">2 — Need notes</option><option value="3">3 — Mostly clear</option><option value="4">4 — Can re-code</option><option value="5">5 — Can explain cold</option></select></label>
-              <label>Minutes <small className="journal-hint"><b>Hint</b> Enter time manually or let the timer add it.</small><input type="number" min="0" value={problemDraft.minutes} onChange={(event) => setProblemDraft({ ...problemDraft, minutes: Number(event.target.value), codeReview: null })} /></label>
+              <JournalField id="journal-status" label="Status" hint="Use Attempted until you can complete the solution."><select id="journal-status" aria-describedby="journal-status-hint" value={problemDraft.status} onChange={(event) => setProblemDraft({ ...problemDraft, status: event.target.value as PrepStatus, codeReview: null })}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select></JournalField>
+              <JournalField id="journal-confidence" label="Confidence" hint="Rate whether you could reproduce and explain it tomorrow without notes."><select id="journal-confidence" aria-describedby="journal-confidence-hint" value={problemDraft.confidence} onChange={(event) => setProblemDraft({ ...problemDraft, confidence: Number(event.target.value), codeReview: null })}><option value="0">Not rated</option><option value="1">1 — Cannot reproduce</option><option value="2">2 — Need notes</option><option value="3">3 — Mostly clear</option><option value="4">4 — Can re-code</option><option value="5">5 — Can explain cold</option></select></JournalField>
+              <JournalField id="journal-minutes" label="Minutes" hint="Enter time manually or let the timer add it."><input id="journal-minutes" aria-describedby="journal-minutes-hint" type="number" min="0" value={problemDraft.minutes} onChange={(event) => setProblemDraft({ ...problemDraft, minutes: Number(event.target.value), codeReview: null })} /></JournalField>
             </div>
             <div className={`journal-timer ${timerRunning && timerProblemId === selectedProblem.id ? "is-running" : ""}`}>
               <div className="journal-timer-clock"><span>Practice timer</span><strong>{timerProblemId === selectedProblem.id ? formatTimer(timerSeconds) : "00:00"}</strong></div>
@@ -1110,16 +1127,16 @@ export default function JobHub() {
               )}
             </div>
             <div className="journal-grid">
-              <label className="journal-wide">My brute-force approach <small className="journal-hint"><b>Hint</b> Start with the simplest correct method. Name what you try, what you compare, and when you return.</small><textarea rows={4} value={problemDraft.naiveApproach} onChange={(event) => setProblemDraft({ ...problemDraft, naiveApproach: event.target.value, codeReview: null })} placeholder="What would the brute-force solution do, step by step?" /></label>
-              <label>Brute-force time complexity <small className="journal-hint"><b>Hint</b> Count how many inputs, pairs, or combinations the repeated work visits.</small><textarea rows={2} value={problemDraft.bruteForceTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n²), because…" /></label>
-              <label>Brute-force space complexity <small className="journal-hint"><b>Hint</b> Count extra maps, sets, arrays, stacks, or recursive calls—not the input itself.</small><textarea rows={2} value={problemDraft.bruteForceSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceSpaceComplexity: event.target.value, codeReview: null })} placeholder="Example: O(1) auxiliary space, because…" /></label>
-              <label className="journal-wide">Key invariant / decision rule <small className="journal-hint"><b>Hint</b> Complete: “After processing each item, I know that…” Then explain why that makes the next choice safe.</small><textarea rows={4} value={problemDraft.invariant} onChange={(event) => setProblemDraft({ ...problemDraft, invariant: event.target.value, codeReview: null })} placeholder="What stays true after every step, and why is each choice safe?" /></label>
-              <label className="journal-wide">Optimal algorithm steps <small className="journal-hint"><b>Hint</b> Write 3–6 numbered actions in plain English. Describe the procedure without Python syntax.</small><textarea rows={5} value={problemDraft.solutionSteps} onChange={(event) => setProblemDraft({ ...problemDraft, solutionSteps: event.target.value, codeReview: null })} placeholder="Write the optimized algorithm step by step in plain English." /></label>
-              <label>Optimal time complexity <small className="journal-hint"><b>Hint</b> Explain how many times each item is visited and the cost of lookups, sorting, or heap work.</small><textarea rows={2} value={problemDraft.optimalTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n), because each item…" /></label>
-              <label>Optimal space complexity <small className="journal-hint"><b>Hint</b> State the largest extra structure or recursion depth and how it grows with n.</small><textarea rows={2} value={problemDraft.optimalSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalSpaceComplexity: event.target.value, codeReview: null })} placeholder="State auxiliary space and explain it." /></label>
-              <label>Edge cases & tests <small className="journal-hint"><b>Hint</b> Give at least three concrete inputs and expected outputs: smallest case, duplicates, boundaries, or negatives.</small><textarea rows={3} value={problemDraft.edgeCases} onChange={(event) => setProblemDraft({ ...problemDraft, edgeCases: event.target.value, codeReview: null })} placeholder="Empty, duplicates, boundaries…" /></label>
-              <label>Mistakes / bug cause <small className="journal-hint"><b>Hint</b> Record the symptom, root cause, and one rule that will prevent the same bug next time.</small><textarea rows={3} value={problemDraft.mistakes} onChange={(event) => setProblemDraft({ ...problemDraft, mistakes: event.target.value, codeReview: null })} placeholder="What went wrong and why?" /></label>
-              <label className="journal-wide">Interview explanation (about 60 seconds) <small className="journal-hint"><b>Why this matters</b> Interviews test whether you can explain before coding. Briefly cover the problem, brute-force tradeoff, optimal insight, steps, and complexity.</small><textarea rows={4} value={problemDraft.explanation} onChange={(event) => setProblemDraft({ ...problemDraft, explanation: event.target.value, codeReview: null })} placeholder="Write what you would actually say aloud to the interviewer in about 60 seconds." /></label>
+              <JournalField id="brute-force-approach" className="journal-wide" label="My brute-force approach" hint="Start with the simplest correct method. Name what you try, what you compare, and when you return."><textarea id="brute-force-approach" aria-describedby="brute-force-approach-hint" rows={4} value={problemDraft.naiveApproach} onChange={(event) => setProblemDraft({ ...problemDraft, naiveApproach: event.target.value, codeReview: null })} placeholder="What would the brute-force solution do, step by step?" /></JournalField>
+              <JournalField id="brute-force-time" label="Brute-force time complexity" hint="Count how many inputs, pairs, or combinations the repeated work visits."><textarea id="brute-force-time" aria-describedby="brute-force-time-hint" rows={2} value={problemDraft.bruteForceTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n²), because…" /></JournalField>
+              <JournalField id="brute-force-space" label="Brute-force space complexity" hint="Count extra maps, sets, arrays, stacks, or recursive calls—not the input itself."><textarea id="brute-force-space" aria-describedby="brute-force-space-hint" rows={2} value={problemDraft.bruteForceSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceSpaceComplexity: event.target.value, codeReview: null })} placeholder="Example: O(1) auxiliary space, because…" /></JournalField>
+              <JournalField id="journal-invariant" className="journal-wide" label="Key invariant / decision rule" hint="Complete: “After processing each item, I know that…” Then explain why that makes the next choice safe."><textarea id="journal-invariant" aria-describedby="journal-invariant-hint" rows={4} value={problemDraft.invariant} onChange={(event) => setProblemDraft({ ...problemDraft, invariant: event.target.value, codeReview: null })} placeholder="What stays true after every step, and why is each choice safe?" /></JournalField>
+              <JournalField id="optimal-steps" className="journal-wide" label="Optimal algorithm steps" hint="Write 3–6 numbered actions in plain English. Describe the procedure without Python syntax."><textarea id="optimal-steps" aria-describedby="optimal-steps-hint" rows={5} value={problemDraft.solutionSteps} onChange={(event) => setProblemDraft({ ...problemDraft, solutionSteps: event.target.value, codeReview: null })} placeholder="Write the optimized algorithm step by step in plain English." /></JournalField>
+              <JournalField id="optimal-time" label="Optimal time complexity" hint="Explain how many times each item is visited and the cost of lookups, sorting, or heap work."><textarea id="optimal-time" aria-describedby="optimal-time-hint" rows={2} value={problemDraft.optimalTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n), because each item…" /></JournalField>
+              <JournalField id="optimal-space" label="Optimal space complexity" hint="State the largest extra structure or recursion depth and how it grows with n."><textarea id="optimal-space" aria-describedby="optimal-space-hint" rows={2} value={problemDraft.optimalSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalSpaceComplexity: event.target.value, codeReview: null })} placeholder="State auxiliary space and explain it." /></JournalField>
+              <JournalField id="edge-cases" label="Edge cases & tests" hint="Give at least three concrete inputs and expected outputs: smallest case, duplicates, boundaries, or negatives."><textarea id="edge-cases" aria-describedby="edge-cases-hint" rows={3} value={problemDraft.edgeCases} onChange={(event) => setProblemDraft({ ...problemDraft, edgeCases: event.target.value, codeReview: null })} placeholder="Empty, duplicates, boundaries…" /></JournalField>
+              <JournalField id="mistakes" label="Mistakes / bug cause" hint="Record the symptom, root cause, and one rule that will prevent the same bug next time."><textarea id="mistakes" aria-describedby="mistakes-hint" rows={3} value={problemDraft.mistakes} onChange={(event) => setProblemDraft({ ...problemDraft, mistakes: event.target.value, codeReview: null })} placeholder="What went wrong and why?" /></JournalField>
+              <JournalField id="interview-explanation" className="journal-wide" label="Interview explanation (about 60 seconds)" hint="Interviews test whether you can explain before coding. Briefly cover the problem, brute-force tradeoff, optimal insight, steps, and complexity."><textarea id="interview-explanation" aria-describedby="interview-explanation-hint" rows={4} value={problemDraft.explanation} onChange={(event) => setProblemDraft({ ...problemDraft, explanation: event.target.value, codeReview: null })} placeholder="Write what you would actually say aloud to the interviewer in about 60 seconds." /></JournalField>
             </div>
             <section className="code-review-lab" aria-labelledby="code-review-heading">
               <div className="code-review-heading">
@@ -1131,9 +1148,9 @@ export default function JobHub() {
                 <span>Your code and journal answers are sent to OpenAI only when you request a review.</span>
                 <button className="review-button" disabled={reviewRunning || !hasReviewableInput(problemDraft)} onClick={() => void evaluateCode()}>{reviewRunning ? "Scoring your work…" : problemDraft.codeReview ? "Score again" : "Score all my work"}</button>
               </div>
-              <label className="code-input-label">Paste your {problemDraft.codeLanguage || settings.primaryLanguage} solution <small className="journal-hint"><b>Hint</b> Paste runnable code that matches your optimal steps. This is separate from what you would say aloud.</small><textarea className="code-input" rows={14} spellCheck={false} value={problemDraft.code} onChange={(event) => setProblemDraft({ ...problemDraft, code: event.target.value, codeReview: null })} placeholder={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution here…`} /></label>
+              <JournalField id="solution-code" className="code-input-label" label={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution`} hint="Paste runnable code that matches your optimal steps. This is separate from what you would say aloud."><textarea id="solution-code" aria-describedby="solution-code-hint" className="code-input" rows={14} spellCheck={false} value={problemDraft.code} onChange={(event) => setProblemDraft({ ...problemDraft, code: event.target.value, codeReview: null })} placeholder={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution here…`} /></JournalField>
               {reviewRunning && <div className="review-loading" role="status"><span /><div><strong>Checking your code, reasoning, and explanation…</strong><small>This usually takes under a minute.</small></div></div>}
-              {reviewError && <div className="review-error" role="alert"><strong>Review could not run</strong><span>{reviewError}</span><small>If setup is needed, create <code>.env.local</code>, add <code>OPENAI_API_KEY=your-key</code>, then restart Job Hub.</small></div>}
+              {reviewError && <div className="review-error" role="alert"><strong>Review could not run</strong><span>{reviewError}</span><small>Your journal stays saved in this browser. If the connection message repeats, confirm Job Hub is still running locally and refresh.</small></div>}
               {problemDraft.codeReview && (
                 <div className="review-result">
                   <div className="review-score-row">

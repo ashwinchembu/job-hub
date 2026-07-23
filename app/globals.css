@@ -1506,13 +1506,39 @@ textarea:focus-visible {
 }
 
 .form-grid label,
-.journal-status-row label,
-.journal-grid label {
+.journal-field {
   display: grid;
   gap: 7px;
   color: var(--ink-soft);
   font-size: 11px;
   font-weight: 700;
+}
+
+.journal-field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.journal-field-heading label {
+  cursor: pointer;
+}
+
+.journal-hint-button {
+  padding: 3px 7px;
+  border: 1px solid #b9d5c8;
+  border-radius: 999px;
+  background: #f0f8f3;
+  color: var(--green);
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.journal-hint-button:hover {
+  border-color: var(--green);
+  background: var(--mint);
 }
 
 .form-grid input,
@@ -1638,19 +1664,11 @@ textarea:focus-visible {
   gap: 14px;
 }
 
-.journal-grid label > small {
-  margin-top: -3px;
-  color: #73827c;
-  font-size: 10px;
-  font-weight: 500;
-  line-height: 1.4;
-}
-
-.journal-hint,
-.journal-grid label > small.journal-hint,
-.code-input-label > small.journal-hint {
+.journal-hint {
+  margin: 0;
   padding: 7px 8px;
   display: block;
+  border-left: 3px solid #9dcab5;
   border-radius: 8px;
   background: #f2f5ee;
   color: #65756e;
@@ -1666,11 +1684,6 @@ textarea:focus-visible {
   font-weight: 850;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-}
-
-.journal-status-row .journal-hint,
-.journal-grid .journal-hint {
-  min-height: 46px;
 }
 
 .code-review-lab {
@@ -2562,11 +2575,6 @@ textarea:focus-visible {
 
   .journal-timer-button {
     width: 100%;
-  }
-
-  .journal-status-row .journal-hint,
-  .journal-grid .journal-hint {
-    min-height: 0;
   }
 
   .form-wide,
