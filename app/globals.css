@@ -1506,6 +1506,13 @@ textarea:focus-visible {
   background: linear-gradient(135deg, #faf8ff, #f3f7ee);
 }
 
+.data-card.local-journal-card {
+  grid-column: 1 / -1;
+  min-height: 0;
+  border-color: #9dcab5;
+  background: linear-gradient(135deg, #f1f9f4, #fffdf8);
+}
+
 .data-card-title-row > div > p {
   min-height: 0;
 }
@@ -1521,12 +1528,14 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-.google-sync-badge.sync-synced {
+.google-sync-badge.sync-synced,
+.google-sync-badge.sync-saved {
   background: #ddefdf;
   color: #22543e;
 }
 
-.google-sync-badge.sync-syncing {
+.google-sync-badge.sync-syncing,
+.google-sync-badge.sync-saving {
   background: #fff1bf;
   color: #6b5710;
 }
@@ -1575,6 +1584,25 @@ textarea:focus-visible {
 
 .google-sync-message.sync-error {
   color: var(--red);
+}
+
+.local-backup-paths {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.local-backup-paths code {
+  max-width: 100%;
+  padding: 7px 9px;
+  overflow: hidden;
+  border: 1px solid #c8d7ce;
+  border-radius: 8px;
+  background: white;
+  color: var(--green);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
 }
 
 .button-link {

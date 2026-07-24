@@ -6,6 +6,7 @@ const dataSource = await readFile(new URL("../app/data.ts", import.meta.url), "u
 const hubSource = await readFile(new URL("../app/JobHub.tsx", import.meta.url), "utf8");
 const trackerSource = await readFile(new URL("../build/local-job-tracker.ts", import.meta.url), "utf8");
 const journalSyncSource = await readFile(new URL("../build/local-google-journal.ts", import.meta.url), "utf8");
+const localBackupSource = await readFile(new URL("../build/local-journal-backup.ts", import.meta.url), "utf8");
 
 function numbersFrom(source) {
   return [...source.matchAll(/\b\d+\b/g)].map((match) => Number(match[0]));
@@ -56,7 +57,7 @@ test("practice and sync timing retain second precision", () => {
 test("journal saves and AI reviews both trigger Google Sheets upserts", () => {
   assert.match(hubSource, /GOOGLE_JOURNAL_KEY = "job-hub:google-journal:v1"/);
   assert.match(hubSource, /fetch\("\/api\/journal-sync"/);
-  assert.equal([...hubSource.matchAll(/void syncProblemToGoogle\(selectedProblem,/g)].length, 2);
+  assert.equal([...hubSource.matchAll(/saveProblemEverywhere\(selectedProblem,/g)].length, 2);
   assert.match(journalSyncSource, /hostname === "script\.google\.com"/);
   assert.match(journalSyncSource, /\/macros\\\/s\\\/\[\^\/\]\+\\\/exec/);
 });
@@ -74,4 +75,19 @@ test("the overview carousel can move backward through completed problems", () =>
   assert.match(hubSource, /Math\.max\(0, Math\.min\(LAST_PLAN_INDEX, planDayIndex \+ focusDayOffset\)\)/);
   assert.match(hubSource, /Show previous or completed problem/);
   assert.match(hubSource, /focusOffset === -1/);
+});
+
+test("journals are automatically backed up to private local JSON and CSV files", () => {
+  assert.match(hubSource, /fetch\("\/api\/journal-local-backup"/);
+  assert.match(hubSource, /saveProblemEverywhere\(selectedProblem, saved\)/);
+  assert.match(hubSource, /saveProblemEverywhere\(selectedProblem, updated\)/);
+  assert.match(localBackupSource, /job-hub-journals\.json/);
+  assert.match(localBackupSource, /job-hub-journals\.csv/);
+  assert.match(localBackupSource, /rowsByKey\.set/);
+});
+
+test("the invariant hint teaches the proof obligation explicitly", () => {
+  assert.match(hubSource, /Before each step/);
+  assert.match(hubSource, /safely make this decision because/);
+  assert.match(hubSource, /proves you never discard a valid answer/);
 });

@@ -3,6 +3,7 @@ import { defineConfig, loadEnv } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { localCodeReview } from "./build/local-code-review";
 import { localGoogleJournal } from "./build/local-google-journal";
+import { localJournalBackup } from "./build/local-journal-backup";
 import { localJobTracker } from "./build/local-job-tracker";
 import { sites } from "./build/sites-vite-plugin";
 
@@ -61,6 +62,7 @@ export default defineConfig(async ({ mode }) => {
     plugins: [
       localJobTracker(),
       localCodeReview(),
+      localJournalBackup(),
       localGoogleJournal(),
       vinext(),
       sites(),

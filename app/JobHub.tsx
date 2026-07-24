@@ -143,6 +143,14 @@ type GoogleJournalSyncState = {
   message: string;
 };
 
+type LocalJournalBackupState = {
+  status: "ready" | "saving" | "saved" | "error";
+  message: string;
+  rowCount: number;
+  jsonPath: string;
+  csvPath: string;
+};
+
 const APPLICATIONS_KEY = "job-hub:applications:v1";
 const PROGRESS_KEY = "job-hub:problem-progress:v1";
 const SETTINGS_KEY = "job-hub:settings:v1";
@@ -543,7 +551,7 @@ function getJournalHints(problem: InterviewProblem) {
     bruteForceApproach: `${problem.title}: ${context.bruteForce}. Then state when that baseline finds the answer.`,
     bruteForceTime: `For ${problem.title}, count the exhaustive candidates or repeated work before applying the insight ${cue}`,
     bruteForceSpace: `For the baseline ${problem.title} solution, count only auxiliary storage and recursion; name what grows with the input.`,
-    invariant: `Turn ${cue} into a precise invariant about ${context.state}. State when it is true and why each update preserves it.`,
+    invariant: `For ${problem.title}, write three sentences: (1) “Before each step, ${context.state} represents ___.” (2) “That means I can safely make this decision because ___.” (3) “After I update the state, the same statement is still true because ___.” Connect every blank to ${cue}. An invariant is not just what your data structure stores—it is the promise that stays true before and after every loop or recursive call and proves you never discard a valid answer.`,
     optimalSteps: `Build the ${problem.title} procedure around ${context.strategy}. Write the initialization, repeated decision, update, and return in order.`,
     optimalTime: `For this ${problem.pattern} solution, justify time using ${context.operation}; do not give Big-O without the reason.`,
     optimalSpace: `Name every growing structure used for ${context.state}, then give the largest auxiliary-space term.`,
@@ -756,6 +764,13 @@ export default function JobHub() {
     status: "not-configured",
     message: "Add the Apps Script web-app URL to turn on automatic Google Sheets backup.",
   });
+  const [localJournalBackup, setLocalJournalBackup] = useState<LocalJournalBackupState>({
+    status: "ready",
+    message: "Every journal save is also written to your local drive.",
+    rowCount: 0,
+    jsonPath: "private-data/job-hub-journals.json",
+    csvPath: "private-data/job-hub-journals.csv",
+  });
   const [toast, setToast] = useState("");
   const [liveSyncConnected, setLiveSyncConnected] = useState(false);
   const [sheetSync, setSheetSync] = useState<SheetSyncState>({
@@ -768,6 +783,7 @@ export default function JobHub() {
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const syncInFlightRef = useRef(false);
+  const localBackupHydratedRef = useRef(false);
 
   const syncApplicationsFromSheet = useCallback(async (announce = false) => {
     if (syncInFlightRef.current) return;
@@ -903,6 +919,20 @@ export default function JobHub() {
   }, [progress, ready]);
 
   useEffect(() => {
+    if (!ready || localBackupHydratedRef.current) return;
+    const entries = Object.entries(progress).flatMap(([problemId, item]) => {
+      const problem = interviewPlan.find((candidate) => String(candidate.id) === problemId);
+      return problem ? [{ problem, item }] : [];
+    });
+    if (!entries.length) return;
+    void backupJournalRowsLocally(entries).then((saved) => {
+      if (saved) localBackupHydratedRef.current = true;
+    });
+    // This is a one-time hydration pass; later saves call the backup directly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progress, ready]);
+
+  useEffect(() => {
     if (!ready) return;
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [settings, ready]);
@@ -1005,6 +1035,47 @@ export default function JobHub() {
     setReviewError("");
   }
 
+  async function backupJournalRowsLocally(
+    entries: Array<{ problem: InterviewProblem; item: ProblemProgress }>,
+    announce = false,
+  ) {
+    if (!entries.length) {
+      if (announce) showToast("No saved journals to back up yet");
+      return false;
+    }
+    const rows = entries.map(({ problem, item }) => journalSheetRow(problem, item));
+    setLocalJournalBackup((current) => ({
+      ...current,
+      status: "saving",
+      message: `Saving ${rows.length} journal${rows.length === 1 ? "" : "s"} to your local drive…`,
+    }));
+    try {
+      const response = await fetch("/api/journal-local-backup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "The local-drive journal backup could not be written.");
+      }
+      setLocalJournalBackup({
+        status: "saved",
+        message: `${payload.rowCount} journal${payload.rowCount === 1 ? "" : "s"} safely stored on this Mac.`,
+        rowCount: payload.rowCount,
+        jsonPath: payload.jsonPath,
+        csvPath: payload.csvPath,
+      });
+      if (announce) showToast(`${payload.rowCount} journals backed up to the local drive`);
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The local-drive journal backup could not be written.";
+      setLocalJournalBackup((current) => ({ ...current, status: "error", message }));
+      if (announce) showToast("Local-drive backup needs attention");
+      return false;
+    }
+  }
+
   async function syncJournalRows(
     entries: Array<{ problem: InterviewProblem; item: ProblemProgress }>,
     announce = false,
@@ -1091,12 +1162,25 @@ export default function JobHub() {
     return syncJournalRows([{ problem, item }]);
   }
 
+  function saveProblemEverywhere(problem: InterviewProblem, item: ProblemProgress) {
+    void backupJournalRowsLocally([{ problem, item }]);
+    void syncProblemToGoogle(problem, item);
+  }
+
   function syncAllJournals() {
     const entries = Object.entries(progress).flatMap(([problemId, item]) => {
       const problem = interviewPlan.find((candidate) => String(candidate.id) === problemId);
       return problem ? [{ problem, item }] : [];
     });
     return syncJournalRows(entries, true);
+  }
+
+  function backupAllJournalsLocally() {
+    const entries = Object.entries(progress).flatMap(([problemId, item]) => {
+      const problem = interviewPlan.find((candidate) => String(candidate.id) === problemId);
+      return problem ? [{ problem, item }] : [];
+    });
+    return backupJournalRowsLocally(entries, true);
   }
 
   function recordHintUse(hintId: string) {
@@ -1134,7 +1218,7 @@ export default function JobHub() {
       codeLanguage: normalizeLanguage(problemDraft.codeLanguage || settings.primaryLanguage),
     };
     setProgress((items) => ({ ...items, [String(selectedProblem.id)]: saved }));
-    void syncProblemToGoogle(selectedProblem, saved);
+    saveProblemEverywhere(selectedProblem, saved);
     setSelectedProblem(null);
     showToast(
       markedAttempted
@@ -1192,7 +1276,7 @@ export default function JobHub() {
       };
       setProblemDraft(updated);
       setProgress((items) => ({ ...items, [String(selectedProblem.id)]: updated }));
-      void syncProblemToGoogle(selectedProblem, updated);
+      saveProblemEverywhere(selectedProblem, updated);
       showToast(
         googleJournal.webhookUrl
           ? "AI review saved · Google sync started"
@@ -1641,8 +1725,23 @@ export default function JobHub() {
   function renderData() {
     return (
       <>
-        <section className="page-heading"><div><p className="eyebrow">Your data</p><h1>You own the record.</h1><p>Applications come from the project workbook. Coding progress stays in this browser and can also back up to your private Google Sheet.</p></div></section>
+        <section className="page-heading"><div><p className="eyebrow">Your data</p><h1>You own the record.</h1><p>Applications come from the project workbook. Coding journals stay in this browser, back up to the local drive, and can also sync to your private Google Sheet.</p></div></section>
         <section className="data-grid">
+          <article className="data-card local-journal-card">
+            <div className="data-icon">⌂</div>
+            <div>
+              <div className="data-card-title-row">
+                <div><h2>Local-drive journal</h2><p>Every journal save and AI score is automatically upserted into private JSON and CSV files inside this Job Hub folder.</p></div>
+                <span className={`google-sync-badge sync-${localJournalBackup.status}`}>{localJournalBackup.status === "saved" ? "Saved" : localJournalBackup.status === "saving" ? "Saving" : localJournalBackup.status === "error" ? "Needs attention" : "Ready"}</span>
+              </div>
+              <div className="local-backup-paths">
+                <code>{localJournalBackup.jsonPath}</code>
+                <code>{localJournalBackup.csvPath}</code>
+              </div>
+              <p className={`google-sync-message sync-${localJournalBackup.status}`}>{localJournalBackup.message}</p>
+              <button className="secondary-button" disabled={localJournalBackup.status === "saving"} onClick={() => void backupAllJournalsLocally()}>{localJournalBackup.status === "saving" ? "Saving…" : "Back up all journals now"}</button>
+            </div>
+          </article>
           <article className="data-card google-journal-card">
             <div className="data-icon">G</div>
             <div>
