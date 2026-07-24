@@ -132,30 +132,18 @@ type Settings = {
   weeklyGoal: number;
 };
 
-type GoogleJournalSettings = {
-  sheetUrl: string;
-  webhookUrl: string;
-  lastSyncedAt: string;
-};
-
-type GoogleJournalSyncState = {
-  status: "not-configured" | "ready" | "syncing" | "synced" | "error";
-  message: string;
-};
-
 type LocalJournalBackupState = {
   status: "ready" | "saving" | "saved" | "error";
   message: string;
   rowCount: number;
   jsonPath: string;
   csvPath: string;
+  xlsxPath: string;
 };
 
 const APPLICATIONS_KEY = "job-hub:applications:v1";
 const PROGRESS_KEY = "job-hub:problem-progress:v1";
 const SETTINGS_KEY = "job-hub:settings:v1";
-const GOOGLE_JOURNAL_KEY = "job-hub:google-journal:v1";
-const DEFAULT_GOOGLE_SHEET_URL = import.meta.env.VITE_JOB_HUB_JOURNAL_SHEET_URL?.trim() || "";
 const SHEET_SYNC_INTERVAL_MS = 30_000;
 const HINT_PENALTY = 10;
 const LAST_PLAN_INDEX = interviewPlan.length - 1;
@@ -755,21 +743,13 @@ export default function JobHub() {
   const [focusSlideDirection, setFocusSlideDirection] = useState<"forward" | "back">("forward");
   const [reviewRunning, setReviewRunning] = useState(false);
   const [reviewError, setReviewError] = useState("");
-  const [googleJournal, setGoogleJournal] = useState<GoogleJournalSettings>({
-    sheetUrl: DEFAULT_GOOGLE_SHEET_URL,
-    webhookUrl: "",
-    lastSyncedAt: "",
-  });
-  const [googleJournalSync, setGoogleJournalSync] = useState<GoogleJournalSyncState>({
-    status: "not-configured",
-    message: "Add the Apps Script web-app URL to turn on automatic Google Sheets backup.",
-  });
   const [localJournalBackup, setLocalJournalBackup] = useState<LocalJournalBackupState>({
     status: "ready",
-    message: "Every journal save is also written to your local drive.",
+    message: "Every journal save is also written to a local Excel workbook.",
     rowCount: 0,
     jsonPath: "private-data/job-hub-journals.json",
     csvPath: "private-data/job-hub-journals.csv",
+    xlsxPath: "private-data/Job_Hub_LeetCode_Journal.xlsx",
   });
   const [toast, setToast] = useState("");
   const [liveSyncConnected, setLiveSyncConnected] = useState(false);
@@ -837,7 +817,6 @@ export default function JobHub() {
       const storedApplications = localStorage.getItem(APPLICATIONS_KEY);
       const storedProgress = localStorage.getItem(PROGRESS_KEY);
       const storedSettings = localStorage.getItem(SETTINGS_KEY);
-      const storedGoogleJournal = localStorage.getItem(GOOGLE_JOURNAL_KEY);
       setApplications(storedApplications ? JSON.parse(storedApplications) : makeDemoApplications(localToday));
       if (storedProgress) {
         const savedProgress = JSON.parse(storedProgress) as Record<string, Partial<ProblemProgress>>;
@@ -848,23 +827,6 @@ export default function JobHub() {
       if (storedSettings) {
         const savedSettings = JSON.parse(storedSettings) as Settings;
         setSettings({ ...savedSettings, primaryLanguage: normalizeLanguage(savedSettings.primaryLanguage) });
-      }
-      if (storedGoogleJournal) {
-        const savedGoogleJournal = JSON.parse(storedGoogleJournal) as Partial<GoogleJournalSettings>;
-        const restored = {
-          sheetUrl: savedGoogleJournal.sheetUrl || DEFAULT_GOOGLE_SHEET_URL,
-          webhookUrl: savedGoogleJournal.webhookUrl || "",
-          lastSyncedAt: savedGoogleJournal.lastSyncedAt || "",
-        };
-        setGoogleJournal(restored);
-        if (restored.webhookUrl) {
-          setGoogleJournalSync({
-            status: restored.lastSyncedAt ? "synced" : "ready",
-            message: restored.lastSyncedAt
-              ? `Last synced ${formatSyncTime(restored.lastSyncedAt)}.`
-              : "Connection saved. Your next journal save will sync automatically.",
-          });
-        }
       }
       setReady(true);
     });
@@ -936,11 +898,6 @@ export default function JobHub() {
     if (!ready) return;
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [settings, ready]);
-
-  useEffect(() => {
-    if (!ready) return;
-    localStorage.setItem(GOOGLE_JOURNAL_KEY, JSON.stringify(googleJournal));
-  }, [googleJournal, ready]);
 
   useEffect(() => {
     if (!timerRunning) return;
@@ -1065,6 +1022,7 @@ export default function JobHub() {
         rowCount: payload.rowCount,
         jsonPath: payload.jsonPath,
         csvPath: payload.csvPath,
+        xlsxPath: payload.xlsxPath,
       });
       if (announce) showToast(`${payload.rowCount} journals backed up to the local drive`);
       return true;
@@ -1076,103 +1034,8 @@ export default function JobHub() {
     }
   }
 
-  async function syncJournalRows(
-    entries: Array<{ problem: InterviewProblem; item: ProblemProgress }>,
-    announce = false,
-  ) {
-    const webhookUrl = googleJournal.webhookUrl.trim();
-    if (!webhookUrl || !entries.length) {
-      if (announce && !webhookUrl) {
-        setGoogleJournalSync({
-          status: "not-configured",
-          message: "Paste the Apps Script /exec URL first, then sync again.",
-        });
-      }
-      if (announce && !entries.length) showToast("No saved journals to sync yet");
-      return false;
-    }
-
-    const rows = entries.map(({ problem, item }) => journalSheetRow(problem, item));
-    setGoogleJournalSync({ status: "syncing", message: `Syncing ${rows.length} journal${rows.length === 1 ? "" : "s"}…` });
-    try {
-      let confirmed = true;
-      let useDirectFallback = false;
-      try {
-        const response = await fetch("/api/journal-sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ webhookUrl, rows }),
-        });
-        if (response.status === 404 || response.status === 405) {
-          useDirectFallback = true;
-        } else {
-          const payload = await response.json();
-          if (!response.ok || !payload.ok) {
-            throw new Error(payload.error || "The local sync bridge could not reach Google Sheets.");
-          }
-        }
-      } catch (error) {
-        if (error instanceof Error && !/fetch|network|load/i.test(error.message)) {
-          throw error;
-        }
-        useDirectFallback = true;
-      }
-
-      if (useDirectFallback) {
-        confirmed = false;
-        const directUrl = new URL(webhookUrl);
-        if (
-          directUrl.protocol !== "https:" ||
-          directUrl.hostname !== "script.google.com" ||
-          !/^\/macros\/s\/[^/]+\/exec$/.test(directUrl.pathname)
-        ) {
-          throw new Error("Use the Apps Script web-app URL that starts with script.google.com and ends in /exec.");
-        }
-        try {
-          await fetch(webhookUrl, {
-            method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "text/plain;charset=UTF-8" },
-            body: JSON.stringify({ rows }),
-          });
-        } catch {
-          throw new Error("Google Sheets could not be reached.");
-        }
-      }
-
-      const lastSyncedAt = new Date().toISOString();
-      setGoogleJournal((current) => ({ ...current, lastSyncedAt }));
-      setGoogleJournalSync({
-        status: "synced",
-        message: confirmed
-          ? `${rows.length} journal${rows.length === 1 ? "" : "s"} confirmed in Google Sheets.`
-          : `${rows.length} journal${rows.length === 1 ? "" : "s"} sent to Google Sheets.`,
-      });
-      if (announce) showToast(`${rows.length} journal${rows.length === 1 ? "" : "s"} synced to Google Sheets`);
-      return true;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Google Sheets could not be reached.";
-      setGoogleJournalSync({ status: "error", message });
-      if (announce) showToast("Google Sheets sync needs attention");
-      return false;
-    }
-  }
-
-  function syncProblemToGoogle(problem: InterviewProblem, item: ProblemProgress) {
-    return syncJournalRows([{ problem, item }]);
-  }
-
   function saveProblemEverywhere(problem: InterviewProblem, item: ProblemProgress) {
     void backupJournalRowsLocally([{ problem, item }]);
-    void syncProblemToGoogle(problem, item);
-  }
-
-  function syncAllJournals() {
-    const entries = Object.entries(progress).flatMap(([problemId, item]) => {
-      const problem = interviewPlan.find((candidate) => String(candidate.id) === problemId);
-      return problem ? [{ problem, item }] : [];
-    });
-    return syncJournalRows(entries, true);
   }
 
   function backupAllJournalsLocally() {
@@ -1220,13 +1083,7 @@ export default function JobHub() {
     setProgress((items) => ({ ...items, [String(selectedProblem.id)]: saved }));
     saveProblemEverywhere(selectedProblem, saved);
     setSelectedProblem(null);
-    showToast(
-      markedAttempted
-        ? "Journal saved · problem marked Attempted"
-        : googleJournal.webhookUrl
-          ? "Problem journal saved · Google sync started"
-          : "Problem journal saved locally",
-    );
+    showToast(markedAttempted ? "Journal saved · problem marked Attempted" : "Journal saved to the local workbook");
   }
 
   async function evaluateCode() {
@@ -1277,11 +1134,7 @@ export default function JobHub() {
       setProblemDraft(updated);
       setProgress((items) => ({ ...items, [String(selectedProblem.id)]: updated }));
       saveProblemEverywhere(selectedProblem, updated);
-      showToast(
-        googleJournal.webhookUrl
-          ? "AI review saved · Google sync started"
-          : "AI code and explanation review saved locally",
-      );
+      showToast("AI review saved to the local workbook");
     } catch (error) {
       const message = error instanceof Error ? error.message : "The AI review could not be completed.";
       const connectionLost = error instanceof TypeError && /fetch|network|load/i.test(message);
@@ -1421,23 +1274,6 @@ export default function JobHub() {
     setApplications([]);
     setProgress({});
     showToast("Local data cleared");
-  }
-
-  function updateGoogleJournalSetting(field: "sheetUrl" | "webhookUrl", value: string) {
-    setGoogleJournal((current) => ({ ...current, [field]: value }));
-    if (field === "webhookUrl") {
-      setGoogleJournalSync(
-        value.trim()
-          ? {
-              status: "ready",
-              message: "Connection saved. Journal saves and AI reviews will sync automatically.",
-            }
-          : {
-              status: "not-configured",
-              message: "Add the Apps Script web-app URL to turn on automatic Google Sheets backup.",
-            },
-      );
-    }
   }
 
   function moveFocusCarousel(step: -1 | 1) {
@@ -1725,46 +1561,23 @@ export default function JobHub() {
   function renderData() {
     return (
       <>
-        <section className="page-heading"><div><p className="eyebrow">Your data</p><h1>You own the record.</h1><p>Applications come from the project workbook. Coding journals stay in this browser, back up to the local drive, and can also sync to your private Google Sheet.</p></div></section>
+        <section className="page-heading"><div><p className="eyebrow">Your data</p><h1>You own the record.</h1><p>Applications come from the local job workbook. Coding journals and AI scores are written to their own local Excel workbook beside this app.</p></div></section>
         <section className="data-grid">
           <article className="data-card local-journal-card">
             <div className="data-icon">⌂</div>
             <div>
               <div className="data-card-title-row">
-                <div><h2>Local-drive journal</h2><p>Every journal save and AI score is automatically upserted into private JSON and CSV files inside this Job Hub folder.</p></div>
-                <span className={`google-sync-badge sync-${localJournalBackup.status}`}>{localJournalBackup.status === "saved" ? "Saved" : localJournalBackup.status === "saving" ? "Saving" : localJournalBackup.status === "error" ? "Needs attention" : "Ready"}</span>
+                <div><h2>Local Excel journal</h2><p>Every journal save and AI review updates this private workbook automatically, just like the local applications tracker.</p></div>
+                <span className={`backup-status-badge sync-${localJournalBackup.status}`}>{localJournalBackup.status === "saved" ? "Saved" : localJournalBackup.status === "saving" ? "Saving" : localJournalBackup.status === "error" ? "Needs attention" : "Ready"}</span>
               </div>
               <div className="local-backup-paths">
-                <code>{localJournalBackup.jsonPath}</code>
-                <code>{localJournalBackup.csvPath}</code>
+                <code className="local-workbook-path">{localJournalBackup.xlsxPath}</code>
               </div>
-              <p className={`google-sync-message sync-${localJournalBackup.status}`}>{localJournalBackup.message}</p>
-              <button className="secondary-button" disabled={localJournalBackup.status === "saving"} onClick={() => void backupAllJournalsLocally()}>{localJournalBackup.status === "saving" ? "Saving…" : "Back up all journals now"}</button>
-            </div>
-          </article>
-          <article className="data-card google-journal-card">
-            <div className="data-icon">G</div>
-            <div>
-              <div className="data-card-title-row">
-                <div><h2>Google Sheets journal</h2><p>Keep every saved journal, final score, rubric score, hint penalty, issue, and next action in your private sheet.</p></div>
-                <span className={`google-sync-badge sync-${googleJournalSync.status}`}>{googleJournalSync.status === "synced" ? "Synced" : googleJournalSync.status === "syncing" ? "Syncing" : googleJournalSync.status === "error" ? "Needs attention" : googleJournal.webhookUrl ? "Ready" : "Setup needed"}</span>
-              </div>
-              <div className="google-journal-form">
-                <label>
-                  Google Sheet link
-                  <input type="url" value={googleJournal.sheetUrl} onChange={(event) => updateGoogleJournalSetting("sheetUrl", event.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" />
-                </label>
-                <label>
-                  Apps Script web-app URL
-                  <input type="url" value={googleJournal.webhookUrl} onChange={(event) => updateGoogleJournalSetting("webhookUrl", event.target.value)} placeholder="https://script.google.com/macros/s/…/exec" />
-                </label>
-              </div>
-              <p className={`google-sync-message sync-${googleJournalSync.status}`}>{googleJournalSync.message}</p>
+              <p className={`backup-status-message sync-${localJournalBackup.status}`}>{localJournalBackup.message}</p>
               <div className="button-row">
-                <button className="primary-button" disabled={!googleJournal.webhookUrl || googleJournalSync.status === "syncing"} onClick={() => void syncAllJournals()}>{googleJournalSync.status === "syncing" ? "Syncing…" : "Sync all journals now"}</button>
-                {googleJournal.sheetUrl && <a className="secondary-button button-link" href={googleJournal.sheetUrl} target="_blank" rel="noreferrer">Open Google Sheet ↗</a>}
+                <button className="primary-button" disabled={localJournalBackup.status === "saving"} onClick={() => void backupAllJournalsLocally()}>{localJournalBackup.status === "saving" ? "Updating workbook…" : "Update workbook now"}</button>
               </div>
-              {!googleJournal.webhookUrl && <small className="google-setup-note">In the sheet’s <b>Setup</b> tab, copy the included code into Extensions → Apps Script, deploy it as a web app, then paste the ending-in-<b>/exec</b> link here once.</small>}
+              <small className="local-backup-note">Companion recovery files: <code>{localJournalBackup.jsonPath}</code> and <code>{localJournalBackup.csvPath}</code>.</small>
             </div>
           </article>
           <article className="data-card featured"><div className="data-icon">↓</div><div><h2>Export a backup</h2><p>Download applications, coding progress, journals, and settings as one JSON file.</p><button className="primary-button" onClick={exportBackup}>Download backup</button></div></article>

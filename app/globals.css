@@ -1499,13 +1499,6 @@ textarea:focus-visible {
   background: var(--mint);
 }
 
-.data-card.google-journal-card {
-  grid-column: 1 / -1;
-  min-height: 0;
-  border-color: #b8abd9;
-  background: linear-gradient(135deg, #faf8ff, #f3f7ee);
-}
-
 .data-card.local-journal-card {
   grid-column: 1 / -1;
   min-height: 0;
@@ -1517,7 +1510,7 @@ textarea:focus-visible {
   min-height: 0;
 }
 
-.google-sync-badge {
+.backup-status-badge {
   flex: 0 0 auto;
   padding: 6px 9px;
   border-radius: 999px;
@@ -1528,61 +1521,30 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-.google-sync-badge.sync-synced,
-.google-sync-badge.sync-saved {
+.backup-status-badge.sync-synced,
+.backup-status-badge.sync-saved {
   background: #ddefdf;
   color: #22543e;
 }
 
-.google-sync-badge.sync-syncing,
-.google-sync-badge.sync-saving {
+.backup-status-badge.sync-syncing,
+.backup-status-badge.sync-saving {
   background: #fff1bf;
   color: #6b5710;
 }
 
-.google-sync-badge.sync-error {
+.backup-status-badge.sync-error {
   background: #f9ded8;
   color: #8a3626;
 }
 
-.google-journal-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.google-journal-form label {
-  display: grid;
-  gap: 6px;
-  color: var(--ink-soft);
-  font-size: 11px;
-  font-weight: 750;
-}
-
-.google-journal-form input {
-  width: 100%;
-  min-width: 0;
-  padding: 11px 12px;
-  border: 1px solid var(--line-dark);
-  border-radius: 10px;
-  background: white;
-  color: var(--ink);
-  font: inherit;
-  font-size: 12px;
-}
-
-.google-journal-form input:focus {
-  outline: 2px solid rgba(102, 82, 150, 0.25);
-  border-color: #806bb0;
-}
-
-.google-sync-message {
+.backup-status-message {
   min-height: 0 !important;
   margin: 11px 0 13px !important;
   font-size: 12px;
 }
 
-.google-sync-message.sync-error {
+.backup-status-message.sync-error {
   color: var(--red);
 }
 
@@ -1605,14 +1567,13 @@ textarea:focus-visible {
   text-overflow: ellipsis;
 }
 
-.button-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none;
+.local-backup-paths .local-workbook-path {
+  flex: 1 1 100%;
+  font-size: 11px;
+  font-weight: 750;
 }
 
-.google-setup-note {
+.local-backup-note {
   display: block;
   max-width: 900px;
   margin-top: 14px;
@@ -2817,10 +2778,6 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .google-journal-form {
-    grid-template-columns: 1fr;
-  }
-
   .week-tabs {
     display: flex;
     overflow-x: auto;
@@ -2954,7 +2911,7 @@ textarea:focus-visible {
   }
 
   .daily-score,
-  .google-sync-badge {
+  .backup-status-badge {
     align-self: flex-start;
   }
 

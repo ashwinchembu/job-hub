@@ -5,7 +5,6 @@ import test from "node:test";
 const dataSource = await readFile(new URL("../app/data.ts", import.meta.url), "utf8");
 const hubSource = await readFile(new URL("../app/JobHub.tsx", import.meta.url), "utf8");
 const trackerSource = await readFile(new URL("../build/local-job-tracker.ts", import.meta.url), "utf8");
-const journalSyncSource = await readFile(new URL("../build/local-google-journal.ts", import.meta.url), "utf8");
 const localBackupSource = await readFile(new URL("../build/local-journal-backup.ts", import.meta.url), "utf8");
 
 function numbersFrom(source) {
@@ -54,14 +53,6 @@ test("practice and sync timing retain second precision", () => {
   assert.match(hubSource, /totalSeconds: updatedSeconds/);
 });
 
-test("journal saves and AI reviews both trigger Google Sheets upserts", () => {
-  assert.match(hubSource, /GOOGLE_JOURNAL_KEY = "job-hub:google-journal:v1"/);
-  assert.match(hubSource, /fetch\("\/api\/journal-sync"/);
-  assert.equal([...hubSource.matchAll(/saveProblemEverywhere\(selectedProblem,/g)].length, 2);
-  assert.match(journalSyncSource, /hostname === "script\.google\.com"/);
-  assert.match(journalSyncSource, /\/macros\\\/s\\\/\[\^\/\]\+\\\/exec/);
-});
-
 test("daily coaching uses the latest three scored journals", () => {
   assert.match(hubSource, /function buildDailyCoaching/);
   assert.match(hubSource, /\.slice\(0, 3\)/);
@@ -77,10 +68,14 @@ test("the overview carousel can move backward through completed problems", () =>
   assert.match(hubSource, /focusOffset === -1/);
 });
 
-test("journals are automatically backed up to private local JSON and CSV files", () => {
+test("journal saves and AI reviews update the private local Excel workbook", () => {
   assert.match(hubSource, /fetch\("\/api\/journal-local-backup"/);
   assert.match(hubSource, /saveProblemEverywhere\(selectedProblem, saved\)/);
   assert.match(hubSource, /saveProblemEverywhere\(selectedProblem, updated\)/);
+  assert.match(localBackupSource, /Job_Hub_LeetCode_Journal\.xlsx/);
+  assert.match(localBackupSource, /workbook\.addWorksheet\("Journal Log"/);
+  assert.match(localBackupSource, /workbook\.addWorksheet\("Review Focus"/);
+  assert.match(localBackupSource, /writeLocalWorkbook\(archive\.rows, xlsxPath\)/);
   assert.match(localBackupSource, /job-hub-journals\.json/);
   assert.match(localBackupSource, /job-hub-journals\.csv/);
   assert.match(localBackupSource, /rowsByKey\.set/);
