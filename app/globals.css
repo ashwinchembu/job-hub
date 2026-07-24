@@ -322,6 +322,117 @@ textarea:focus-visible {
   gap: 16px;
 }
 
+.daily-coaching {
+  margin-bottom: 18px;
+  padding: 22px;
+  border: 1px solid #c9c0df;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 92% 8%, rgba(216, 239, 128, 0.4), transparent 24%),
+    linear-gradient(135deg, #faf8ff 0%, #f0ebfa 100%);
+  box-shadow: 0 14px 34px rgba(49, 38, 79, 0.08);
+}
+
+.daily-coaching.is-empty {
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.daily-coaching-heading,
+.data-card-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.daily-coaching-heading h2 {
+  margin: 4px 0 7px;
+  font-size: 24px;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+
+.daily-coaching-heading > div > p:last-child {
+  max-width: 760px;
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.daily-score {
+  flex: 0 0 auto;
+  padding: 8px 11px;
+  border: 1px solid #c9c0df;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.74);
+  color: #665a79;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.daily-score b {
+  color: var(--green);
+}
+
+.daily-coaching-grid {
+  margin-top: 17px;
+  display: grid;
+  grid-template-columns: 0.9fr 1fr 1.45fr;
+  gap: 10px;
+}
+
+.daily-coaching-grid article {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(102, 90, 121, 0.16);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.daily-coaching-grid article > span {
+  display: block;
+  margin-bottom: 7px;
+  color: #756b85;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.daily-coaching-grid article > strong {
+  display: block;
+  color: var(--green);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.daily-coaching-grid article > small {
+  display: block;
+  margin-top: 7px;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+.daily-missing-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.daily-missing-list b {
+  padding: 5px 7px;
+  border-radius: 999px;
+  background: #fff0dc;
+  color: #8a4c22;
+  font-size: 10px;
+}
+
+.daily-next-action {
+  border-color: rgba(35, 90, 66, 0.2) !important;
+  background: rgba(238, 245, 239, 0.9) !important;
+}
+
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1386,6 +1497,99 @@ textarea:focus-visible {
 .data-card.featured {
   border-color: var(--green);
   background: var(--mint);
+}
+
+.data-card.google-journal-card {
+  grid-column: 1 / -1;
+  min-height: 0;
+  border-color: #b8abd9;
+  background: linear-gradient(135deg, #faf8ff, #f3f7ee);
+}
+
+.data-card-title-row > div > p {
+  min-height: 0;
+}
+
+.google-sync-badge {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: #ece8f6;
+  color: #5d4a86;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.google-sync-badge.sync-synced {
+  background: #ddefdf;
+  color: #22543e;
+}
+
+.google-sync-badge.sync-syncing {
+  background: #fff1bf;
+  color: #6b5710;
+}
+
+.google-sync-badge.sync-error {
+  background: #f9ded8;
+  color: #8a3626;
+}
+
+.google-journal-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.google-journal-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.google-journal-form input {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--line-dark);
+  border-radius: 10px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.google-journal-form input:focus {
+  outline: 2px solid rgba(102, 82, 150, 0.25);
+  border-color: #806bb0;
+}
+
+.google-sync-message {
+  min-height: 0 !important;
+  margin: 11px 0 13px !important;
+  font-size: 12px;
+}
+
+.google-sync-message.sync-error {
+  color: var(--red);
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.google-setup-note {
+  display: block;
+  max-width: 900px;
+  margin-top: 14px;
+  color: #665a79;
+  line-height: 1.55;
 }
 
 .data-card.danger-card {
@@ -2581,6 +2785,14 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .daily-coaching-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .google-journal-form {
+    grid-template-columns: 1fr;
+  }
+
   .week-tabs {
     display: flex;
     overflow-x: auto;
@@ -2706,6 +2918,16 @@ textarea:focus-visible {
 
   .data-card {
     grid-template-columns: 1fr;
+  }
+
+  .daily-coaching-heading,
+  .data-card-title-row {
+    flex-direction: column;
+  }
+
+  .daily-score,
+  .google-sync-badge {
+    align-self: flex-start;
   }
 
   .form-grid,

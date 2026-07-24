@@ -132,9 +132,22 @@ type Settings = {
   weeklyGoal: number;
 };
 
+type GoogleJournalSettings = {
+  sheetUrl: string;
+  webhookUrl: string;
+  lastSyncedAt: string;
+};
+
+type GoogleJournalSyncState = {
+  status: "not-configured" | "ready" | "syncing" | "synced" | "error";
+  message: string;
+};
+
 const APPLICATIONS_KEY = "job-hub:applications:v1";
 const PROGRESS_KEY = "job-hub:problem-progress:v1";
 const SETTINGS_KEY = "job-hub:settings:v1";
+const GOOGLE_JOURNAL_KEY = "job-hub:google-journal:v1";
+const DEFAULT_GOOGLE_SHEET_URL = import.meta.env.VITE_JOB_HUB_JOURNAL_SHEET_URL?.trim() || "";
 const SHEET_SYNC_INTERVAL_MS = 30_000;
 const HINT_PENALTY = 10;
 const LAST_PLAN_INDEX = interviewPlan.length - 1;
@@ -241,6 +254,118 @@ function scoreCategories(breakdown: NonNullable<CodeReview["scoreBreakdown"]>) {
     { label: "Edge-case coverage", weight: "10%", score: breakdown.edgeCaseCoverage },
     { label: "Explanation quality", weight: "20%", score: breakdown.explanationQuality },
   ];
+}
+
+function formatSheetDuration(seconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const remainingSeconds = safeSeconds % 60;
+  return `${pad(hours)}:${pad(minutes)}:${pad(remainingSeconds)}`;
+}
+
+function journalSheetRow(problem: InterviewProblem, item: ProblemProgress) {
+  const review = item.codeReview;
+  const totalSeconds = item.totalSeconds || item.minutes * 60;
+  return {
+    "Sync Key": String(problem.id),
+    "Problem ID": problem.id,
+    "Problem": problem.title,
+    "Day": problem.day,
+    "Week": problem.week,
+    "Pattern": problem.pattern,
+    "Difficulty": problem.difficulty,
+    "Status": item.status,
+    "Confidence": item.confidence,
+    "Total Seconds": totalSeconds,
+    "Time (HH:MM:SS)": formatSheetDuration(totalSeconds),
+    "Independence Score": independenceScore(item),
+    "Final Score": review?.score ?? "",
+    "Verdict": review?.verdict ?? "",
+    "Code Correctness": review?.scoreBreakdown?.codeCorrectness ?? "",
+    "Approach & Reasoning": review?.scoreBreakdown?.approachReasoning ?? "",
+    "Complexity Analysis": review?.scoreBreakdown?.complexityAnalysis ?? "",
+    "Edge-Case Coverage": review?.scoreBreakdown?.edgeCaseCoverage ?? "",
+    "Explanation Quality": review?.scoreBreakdown?.explanationQuality ?? "",
+    "Missing Inputs": review?.inputCoverage?.missing.map(formatCoverageLabel).join("\n") ?? "",
+    "Issues to Fix": review?.issues.map((issue) => `${issue.severity}: ${issue.title} — ${issue.fix}`).join("\n") ?? "",
+    "Next Action": review?.nextAction ?? "",
+    "Review Summary": review?.summary ?? "",
+    "Last Attempt": item.lastAttempt,
+    "Reviewed At": review?.reviewedAt ?? "",
+    "Language": normalizeLanguage(item.codeLanguage),
+    "Code": item.code,
+    "Brute-Force Approach": item.naiveApproach,
+    "Brute-Force Time": item.bruteForceTimeComplexity,
+    "Brute-Force Space": item.bruteForceSpaceComplexity,
+    "Invariant / Decision Rule": item.invariant,
+    "Optimal Steps": item.solutionSteps,
+    "Optimal Time": item.optimalTimeComplexity || item.complexity || "",
+    "Optimal Space": item.optimalSpaceComplexity,
+    "Edge Cases & Tests": item.edgeCases,
+    "Mistakes / Bug Cause": item.mistakes,
+    "60-Second Explanation": item.explanation,
+    "Hints Used": item.hintsUsed.join("\n"),
+    "Last Synced": new Date().toISOString(),
+  };
+}
+
+function buildDailyCoaching(progress: Record<string, ProblemProgress>) {
+  const recent = Object.entries(progress)
+    .flatMap(([problemId, item]) => {
+      const problem = interviewPlan.find((candidate) => String(candidate.id) === problemId);
+      return problem && item.codeReview ? [{ problem, item, review: item.codeReview }] : [];
+    })
+    .sort((a, b) => b.review.reviewedAt.localeCompare(a.review.reviewedAt))
+    .slice(0, 3);
+
+  if (!recent.length) return null;
+
+  const missingCounts = new Map<string, number>();
+  recent.forEach(({ review }) =>
+    review.inputCoverage?.missing.forEach((item) =>
+      missingCounts.set(item, (missingCounts.get(item) ?? 0) + 1),
+    ),
+  );
+  const missing = [...missingCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || formatCoverageLabel(a[0]).localeCompare(formatCoverageLabel(b[0])))
+    .slice(0, 3)
+    .map(([item, count]) => ({ label: formatCoverageLabel(item), count }));
+
+  const categoryAverages = [
+    ["Code correctness", "codeCorrectness"],
+    ["Approach & reasoning", "approachReasoning"],
+    ["Complexity analysis", "complexityAnalysis"],
+    ["Edge-case coverage", "edgeCaseCoverage"],
+    ["Explanation quality", "explanationQuality"],
+  ].flatMap(([label, key]) => {
+    const scores = recent.flatMap(({ review }) => {
+      const breakdown = review.scoreBreakdown;
+      return breakdown ? [breakdown[key as keyof typeof breakdown]] : [];
+    });
+    return scores.length
+      ? [{ label, score: Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) }]
+      : [];
+  });
+  categoryAverages.sort((a, b) => a.score - b.score);
+
+  const severityRank = { Critical: 0, Important: 1, Minor: 2 };
+  const issue = recent
+    .flatMap(({ review }) => review.issues)
+    .sort((a, b) => severityRank[a.severity] - severityRank[b.severity])[0];
+  const latest = recent[0];
+  const averageScore = Math.round(
+    recent.reduce((sum, entry) => sum + entry.review.score, 0) / recent.length,
+  );
+
+  return {
+    recentCount: recent.length,
+    problemNames: recent.map(({ problem }) => problem.title),
+    missing,
+    lowestCategory: categoryAverages[0] ?? null,
+    averageScore,
+    nextAction: issue?.fix || latest.review.nextAction || latest.review.interviewFeedback.improve,
+  };
 }
 
 function JournalField({
@@ -622,6 +747,15 @@ export default function JobHub() {
   const [focusSlideDirection, setFocusSlideDirection] = useState<"forward" | "back">("forward");
   const [reviewRunning, setReviewRunning] = useState(false);
   const [reviewError, setReviewError] = useState("");
+  const [googleJournal, setGoogleJournal] = useState<GoogleJournalSettings>({
+    sheetUrl: DEFAULT_GOOGLE_SHEET_URL,
+    webhookUrl: "",
+    lastSyncedAt: "",
+  });
+  const [googleJournalSync, setGoogleJournalSync] = useState<GoogleJournalSyncState>({
+    status: "not-configured",
+    message: "Add the Apps Script web-app URL to turn on automatic Google Sheets backup.",
+  });
   const [toast, setToast] = useState("");
   const [liveSyncConnected, setLiveSyncConnected] = useState(false);
   const [sheetSync, setSheetSync] = useState<SheetSyncState>({
@@ -687,6 +821,7 @@ export default function JobHub() {
       const storedApplications = localStorage.getItem(APPLICATIONS_KEY);
       const storedProgress = localStorage.getItem(PROGRESS_KEY);
       const storedSettings = localStorage.getItem(SETTINGS_KEY);
+      const storedGoogleJournal = localStorage.getItem(GOOGLE_JOURNAL_KEY);
       setApplications(storedApplications ? JSON.parse(storedApplications) : makeDemoApplications(localToday));
       if (storedProgress) {
         const savedProgress = JSON.parse(storedProgress) as Record<string, Partial<ProblemProgress>>;
@@ -697,6 +832,23 @@ export default function JobHub() {
       if (storedSettings) {
         const savedSettings = JSON.parse(storedSettings) as Settings;
         setSettings({ ...savedSettings, primaryLanguage: normalizeLanguage(savedSettings.primaryLanguage) });
+      }
+      if (storedGoogleJournal) {
+        const savedGoogleJournal = JSON.parse(storedGoogleJournal) as Partial<GoogleJournalSettings>;
+        const restored = {
+          sheetUrl: savedGoogleJournal.sheetUrl || DEFAULT_GOOGLE_SHEET_URL,
+          webhookUrl: savedGoogleJournal.webhookUrl || "",
+          lastSyncedAt: savedGoogleJournal.lastSyncedAt || "",
+        };
+        setGoogleJournal(restored);
+        if (restored.webhookUrl) {
+          setGoogleJournalSync({
+            status: restored.lastSyncedAt ? "synced" : "ready",
+            message: restored.lastSyncedAt
+              ? `Last synced ${formatSyncTime(restored.lastSyncedAt)}.`
+              : "Connection saved. Your next journal save will sync automatically.",
+          });
+        }
       }
       setReady(true);
     });
@@ -756,6 +908,11 @@ export default function JobHub() {
   }, [settings, ready]);
 
   useEffect(() => {
+    if (!ready) return;
+    localStorage.setItem(GOOGLE_JOURNAL_KEY, JSON.stringify(googleJournal));
+  }, [googleJournal, ready]);
+
+  useEffect(() => {
     if (!timerRunning) return;
     const interval = window.setInterval(() => setTimerSeconds((value) => value + 1), 1000);
     return () => window.clearInterval(interval);
@@ -808,6 +965,7 @@ export default function JobHub() {
   const appliedCount = applications.filter((item) => ["Applied", "Interviewing", "Offer"].includes(item.status)).length;
   const offerCount = applications.filter((item) => item.status === "Offer").length;
   const activeApplications = applications.filter((item) => !["Rejected", "Closed"].includes(item.status));
+  const dailyCoaching = useMemo(() => buildDailyCoaching(progress), [progress]);
 
   function showToast(message: string) {
     setToast(message);
@@ -847,6 +1005,100 @@ export default function JobHub() {
     setReviewError("");
   }
 
+  async function syncJournalRows(
+    entries: Array<{ problem: InterviewProblem; item: ProblemProgress }>,
+    announce = false,
+  ) {
+    const webhookUrl = googleJournal.webhookUrl.trim();
+    if (!webhookUrl || !entries.length) {
+      if (announce && !webhookUrl) {
+        setGoogleJournalSync({
+          status: "not-configured",
+          message: "Paste the Apps Script /exec URL first, then sync again.",
+        });
+      }
+      if (announce && !entries.length) showToast("No saved journals to sync yet");
+      return false;
+    }
+
+    const rows = entries.map(({ problem, item }) => journalSheetRow(problem, item));
+    setGoogleJournalSync({ status: "syncing", message: `Syncing ${rows.length} journal${rows.length === 1 ? "" : "s"}…` });
+    try {
+      let confirmed = true;
+      let useDirectFallback = false;
+      try {
+        const response = await fetch("/api/journal-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ webhookUrl, rows }),
+        });
+        if (response.status === 404 || response.status === 405) {
+          useDirectFallback = true;
+        } else {
+          const payload = await response.json();
+          if (!response.ok || !payload.ok) {
+            throw new Error(payload.error || "The local sync bridge could not reach Google Sheets.");
+          }
+        }
+      } catch (error) {
+        if (error instanceof Error && !/fetch|network|load/i.test(error.message)) {
+          throw error;
+        }
+        useDirectFallback = true;
+      }
+
+      if (useDirectFallback) {
+        confirmed = false;
+        const directUrl = new URL(webhookUrl);
+        if (
+          directUrl.protocol !== "https:" ||
+          directUrl.hostname !== "script.google.com" ||
+          !/^\/macros\/s\/[^/]+\/exec$/.test(directUrl.pathname)
+        ) {
+          throw new Error("Use the Apps Script web-app URL that starts with script.google.com and ends in /exec.");
+        }
+        try {
+          await fetch(webhookUrl, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=UTF-8" },
+            body: JSON.stringify({ rows }),
+          });
+        } catch {
+          throw new Error("Google Sheets could not be reached.");
+        }
+      }
+
+      const lastSyncedAt = new Date().toISOString();
+      setGoogleJournal((current) => ({ ...current, lastSyncedAt }));
+      setGoogleJournalSync({
+        status: "synced",
+        message: confirmed
+          ? `${rows.length} journal${rows.length === 1 ? "" : "s"} confirmed in Google Sheets.`
+          : `${rows.length} journal${rows.length === 1 ? "" : "s"} sent to Google Sheets.`,
+      });
+      if (announce) showToast(`${rows.length} journal${rows.length === 1 ? "" : "s"} synced to Google Sheets`);
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Google Sheets could not be reached.";
+      setGoogleJournalSync({ status: "error", message });
+      if (announce) showToast("Google Sheets sync needs attention");
+      return false;
+    }
+  }
+
+  function syncProblemToGoogle(problem: InterviewProblem, item: ProblemProgress) {
+    return syncJournalRows([{ problem, item }]);
+  }
+
+  function syncAllJournals() {
+    const entries = Object.entries(progress).flatMap(([problemId, item]) => {
+      const problem = interviewPlan.find((candidate) => String(candidate.id) === problemId);
+      return problem ? [{ problem, item }] : [];
+    });
+    return syncJournalRows(entries, true);
+  }
+
   function recordHintUse(hintId: string) {
     if (!selectedProblem || problemDraft.hintsUsed.includes(hintId)) return;
     const problemKey = String(selectedProblem.id);
@@ -882,8 +1134,15 @@ export default function JobHub() {
       codeLanguage: normalizeLanguage(problemDraft.codeLanguage || settings.primaryLanguage),
     };
     setProgress((items) => ({ ...items, [String(selectedProblem.id)]: saved }));
+    void syncProblemToGoogle(selectedProblem, saved);
     setSelectedProblem(null);
-    showToast(markedAttempted ? "Journal saved · problem marked Attempted" : "Problem journal saved");
+    showToast(
+      markedAttempted
+        ? "Journal saved · problem marked Attempted"
+        : googleJournal.webhookUrl
+          ? "Problem journal saved · Google sync started"
+          : "Problem journal saved locally",
+    );
   }
 
   async function evaluateCode() {
@@ -933,7 +1192,12 @@ export default function JobHub() {
       };
       setProblemDraft(updated);
       setProgress((items) => ({ ...items, [String(selectedProblem.id)]: updated }));
-      showToast("AI code and explanation review saved");
+      void syncProblemToGoogle(selectedProblem, updated);
+      showToast(
+        googleJournal.webhookUrl
+          ? "AI review saved · Google sync started"
+          : "AI code and explanation review saved locally",
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "The AI review could not be completed.";
       const connectionLost = error instanceof TypeError && /fetch|network|load/i.test(message);
@@ -1075,16 +1339,35 @@ export default function JobHub() {
     showToast("Local data cleared");
   }
 
+  function updateGoogleJournalSetting(field: "sheetUrl" | "webhookUrl", value: string) {
+    setGoogleJournal((current) => ({ ...current, [field]: value }));
+    if (field === "webhookUrl") {
+      setGoogleJournalSync(
+        value.trim()
+          ? {
+              status: "ready",
+              message: "Connection saved. Journal saves and AI reviews will sync automatically.",
+            }
+          : {
+              status: "not-configured",
+              message: "Add the Apps Script web-app URL to turn on automatic Google Sheets backup.",
+            },
+      );
+    }
+  }
+
   function moveFocusCarousel(step: -1 | 1) {
     setFocusSlideDirection(step > 0 ? "forward" : "back");
     setFocusDayOffset((current) => {
-      const normalized = Math.max(0, Math.min(LAST_PLAN_INDEX - planDayIndex, current));
-      return Math.max(0, Math.min(LAST_PLAN_INDEX - planDayIndex, normalized + step));
+      const minimumOffset = -planDayIndex;
+      const maximumOffset = LAST_PLAN_INDEX - planDayIndex;
+      const normalized = Math.max(minimumOffset, Math.min(maximumOffset, current));
+      return Math.max(minimumOffset, Math.min(maximumOffset, normalized + step));
     });
   }
 
   function renderOverview() {
-    const focusProblemIndex = Math.max(planDayIndex, Math.min(LAST_PLAN_INDEX, planDayIndex + focusDayOffset));
+    const focusProblemIndex = Math.max(0, Math.min(LAST_PLAN_INDEX, planDayIndex + focusDayOffset));
     const focusProblem = interviewPlan[focusProblemIndex];
     const focusOffset = focusProblemIndex - planDayIndex;
     const focusProgress = progress[String(focusProblem.id)] ?? emptyProgress;
@@ -1093,7 +1376,16 @@ export default function JobHub() {
     const focusTimeLabel = focusProgress.status.startsWith("Solved") ? "Completed working time" : focusWorkingSeconds > 0 ? "Total working time" : "Practice timer";
     const focusHasSavedJournal = Boolean(progress[String(focusProblem.id)]);
     const focusScheduledDate = addDays(settings.startDate, focusProblem.day - 1);
-    const focusDayLabel = focusOffset === 0 ? "Today" : focusOffset === 1 ? "Tomorrow" : `In ${focusOffset} days`;
+    const focusDayLabel =
+      focusOffset === 0
+        ? "Today"
+        : focusOffset === 1
+          ? "Tomorrow"
+          : focusOffset === -1
+            ? "Yesterday"
+            : focusOffset < 0
+              ? `${Math.abs(focusOffset)} days ago`
+              : `In ${focusOffset} days`;
     const focusDateLabel = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(new Date(`${focusScheduledDate}T12:00:00`));
     const currentWeekProblems = interviewPlan.filter((problem) => problem.week === currentWeek);
     const currentWeekSolved = currentWeekProblems.filter((problem) => ["Solved with Hint", "Solved Independently"].includes(progress[String(problem.id)]?.status)).length;
@@ -1124,6 +1416,52 @@ export default function JobHub() {
           <button className="primary-button" onClick={openNewApplication}>+ Add application</button>
         </section>
 
+        <section className={`daily-coaching ${dailyCoaching ? "" : "is-empty"}`} aria-labelledby="daily-coaching-heading">
+          <div className="daily-coaching-heading">
+            <div>
+              <p className="eyebrow">Daily answer coach</p>
+              <h2 id="daily-coaching-heading">
+                {dailyCoaching ? "What to improve in today’s answer" : "Your review pattern will appear here"}
+              </h2>
+              <p>
+                {dailyCoaching
+                  ? `Based on your last ${dailyCoaching.recentCount} scored journal${dailyCoaching.recentCount === 1 ? "" : "s"}: ${dailyCoaching.problemNames.join(", ")}.`
+                  : "Score a journal with the AI coach. Job Hub will compare your latest three reviews and turn repeated gaps into a daily focus."}
+              </p>
+            </div>
+            {dailyCoaching && <span className="daily-score">Recent average <b>{dailyCoaching.averageScore}</b>/100</span>}
+          </div>
+          {dailyCoaching && (
+            <div className="daily-coaching-grid">
+              <article>
+                <span>Most often missing</span>
+                {dailyCoaching.missing.length ? (
+                  <div className="daily-missing-list">
+                    {dailyCoaching.missing.map((item) => (
+                      <b key={item.label}>{item.label}{item.count > 1 ? ` · ${item.count}×` : ""}</b>
+                    ))}
+                  </div>
+                ) : (
+                  <strong>No journal sections were missing.</strong>
+                )}
+              </article>
+              <article>
+                <span>Lowest recent skill</span>
+                {dailyCoaching.lowestCategory ? (
+                  <strong>{dailyCoaching.lowestCategory.label} · {dailyCoaching.lowestCategory.score}/100</strong>
+                ) : (
+                  <strong>Complete another scored review.</strong>
+                )}
+                <small>Practice the decision, implementation, validation, and learning—not just the final code.</small>
+              </article>
+              <article className="daily-next-action">
+                <span>Do this next</span>
+                <strong>{dailyCoaching.nextAction}</strong>
+              </article>
+            </div>
+          )}
+        </section>
+
         <section className="metric-grid" aria-label="Job search summary">
           <article className="metric-card"><span>Active pipeline</span><strong>{activeApplications.length}</strong><small>{appliedCount} applied or beyond</small></article>
           <article className="metric-card"><span>Interviews</span><strong>{interviewCount}</strong><small>{offerCount} offers</small></article>
@@ -1133,7 +1471,7 @@ export default function JobHub() {
 
         <section className="overview-grid">
           <article className="focus-card">
-            <button className="focus-carousel-arrow focus-carousel-previous" type="button" aria-label={focusOffset === 1 ? "Back to today's problem" : "Show previous scheduled problem"} disabled={focusOffset === 0} onClick={() => moveFocusCarousel(-1)}>‹</button>
+            <button className="focus-carousel-arrow focus-carousel-previous" type="button" aria-label={focusOffset === 1 ? "Back to today's problem" : "Show previous or completed problem"} disabled={focusProblemIndex === 0} onClick={() => moveFocusCarousel(-1)}>‹</button>
             <div className={`focus-card-content slide-${focusSlideDirection}`} key={focusProblem.id} aria-live="polite">
               <div className="card-heading-row">
                 <div><p className="eyebrow">{focusDayLabel} · {focusDateLabel} · Day {focusProblem.day}</p><h2>{focusProblem.title}</h2></div>
@@ -1303,8 +1641,33 @@ export default function JobHub() {
   function renderData() {
     return (
       <>
-        <section className="page-heading"><div><p className="eyebrow">Local data</p><h1>You own the record.</h1><p>Applications come from the project workbook. Coding progress, journals, and manually added roles stay in this browser.</p></div></section>
+        <section className="page-heading"><div><p className="eyebrow">Your data</p><h1>You own the record.</h1><p>Applications come from the project workbook. Coding progress stays in this browser and can also back up to your private Google Sheet.</p></div></section>
         <section className="data-grid">
+          <article className="data-card google-journal-card">
+            <div className="data-icon">G</div>
+            <div>
+              <div className="data-card-title-row">
+                <div><h2>Google Sheets journal</h2><p>Keep every saved journal, final score, rubric score, hint penalty, issue, and next action in your private sheet.</p></div>
+                <span className={`google-sync-badge sync-${googleJournalSync.status}`}>{googleJournalSync.status === "synced" ? "Synced" : googleJournalSync.status === "syncing" ? "Syncing" : googleJournalSync.status === "error" ? "Needs attention" : googleJournal.webhookUrl ? "Ready" : "Setup needed"}</span>
+              </div>
+              <div className="google-journal-form">
+                <label>
+                  Google Sheet link
+                  <input type="url" value={googleJournal.sheetUrl} onChange={(event) => updateGoogleJournalSetting("sheetUrl", event.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" />
+                </label>
+                <label>
+                  Apps Script web-app URL
+                  <input type="url" value={googleJournal.webhookUrl} onChange={(event) => updateGoogleJournalSetting("webhookUrl", event.target.value)} placeholder="https://script.google.com/macros/s/…/exec" />
+                </label>
+              </div>
+              <p className={`google-sync-message sync-${googleJournalSync.status}`}>{googleJournalSync.message}</p>
+              <div className="button-row">
+                <button className="primary-button" disabled={!googleJournal.webhookUrl || googleJournalSync.status === "syncing"} onClick={() => void syncAllJournals()}>{googleJournalSync.status === "syncing" ? "Syncing…" : "Sync all journals now"}</button>
+                {googleJournal.sheetUrl && <a className="secondary-button button-link" href={googleJournal.sheetUrl} target="_blank" rel="noreferrer">Open Google Sheet ↗</a>}
+              </div>
+              {!googleJournal.webhookUrl && <small className="google-setup-note">In the sheet’s <b>Setup</b> tab, copy the included code into Extensions → Apps Script, deploy it as a web app, then paste the ending-in-<b>/exec</b> link here once.</small>}
+            </div>
+          </article>
           <article className="data-card featured"><div className="data-icon">↓</div><div><h2>Export a backup</h2><p>Download applications, coding progress, journals, and settings as one JSON file.</p><button className="primary-button" onClick={exportBackup}>Download backup</button></div></article>
           <article className="data-card"><div className="data-icon">↑</div><div><h2>Import data</h2><p>Restore a Job Hub JSON backup, or import an Applications CSV from your spreadsheet.</p><button className="secondary-button" onClick={() => fileInputRef.current?.click()}>Choose JSON or CSV</button></div></article>
           <article className="data-card"><div className="data-icon">↻</div><div><h2>Workbook connection</h2><p>{sheetSync.status === "connected" ? `${sheetSync.rowCount} rows connected from ${sheetSync.workbook}. ${liveSyncConnected ? "Live updates are connected and refresh immediately after a save." : "Live updates are reconnecting; the 30-second fallback remains active."}` : sheetSync.message}</p><button className="secondary-button" disabled={sheetSync.status === "connecting"} onClick={() => void syncApplicationsFromSheet(true)}>Sync applications now</button></div></article>
