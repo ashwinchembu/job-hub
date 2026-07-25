@@ -5,6 +5,7 @@ import test from "node:test";
 const dataSource = await readFile(new URL("../app/data.ts", import.meta.url), "utf8");
 const hubSource = await readFile(new URL("../app/JobHub.tsx", import.meta.url), "utf8");
 const trackerSource = await readFile(new URL("../build/local-job-tracker.ts", import.meta.url), "utf8");
+const codeReviewSource = await readFile(new URL("../build/local-code-review.ts", import.meta.url), "utf8");
 const localBackupSource = await readFile(new URL("../build/local-journal-backup.ts", import.meta.url), "utf8");
 
 function numbersFrom(source) {
@@ -47,10 +48,20 @@ test("workbook saves stream to the app as live updates", () => {
 });
 
 test("practice and sync timing retain second precision", () => {
-  assert.match(hubSource, /Time logged \(seconds\)/);
+  assert.match(hubSource, /label="Time logged"/);
+  assert.match(hubSource, /aria-label="Time logged minutes"/);
+  assert.match(hubSource, /aria-label="Time logged seconds"/);
+  assert.match(hubSource, /Math\.min\(59/);
   assert.match(hubSource, /second: "2-digit"/);
   assert.match(hubSource, /safeSeconds % 60/);
   assert.match(hubSource, /totalSeconds: updatedSeconds/);
+});
+
+test("the separate 60-second explanation field is removed", () => {
+  assert.doesNotMatch(hubSource, /Interview explanation \(about 60 seconds\)/);
+  assert.doesNotMatch(hubSource, /spoken explanation/);
+  assert.doesNotMatch(localBackupSource, /60-Second Explanation/);
+  assert.match(codeReviewSource, /There is no separate spoken-explanation field/);
 });
 
 test("daily coaching uses the latest three scored journals", () => {

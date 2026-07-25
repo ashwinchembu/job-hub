@@ -1835,28 +1835,50 @@ textarea:focus-visible {
 .journal-status-row {
   padding: 18px 26px 0;
   display: grid;
-  grid-template-columns: 1fr 1.5fr 170px;
+  grid-template-columns: 1fr 1.5fr minmax(230px, 0.9fr);
   gap: 14px;
 }
 
-.precise-time-control {
+.duration-input-group {
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) auto minmax(72px, 1fr);
+  align-items: center;
+  gap: 7px;
+}
+
+.duration-input-group > b {
+  color: var(--ink-soft);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 16px;
+}
+
+.duration-input {
   position: relative;
 }
 
-.precise-time-control input {
-  padding-right: 62px;
+.duration-input input {
+  padding-right: 34px;
+  text-align: right;
 }
 
-.precise-time-control small {
+.duration-input span {
   position: absolute;
   top: 50%;
-  right: 10px;
+  right: 9px;
   color: var(--green);
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   transform: translateY(-50%);
   pointer-events: none;
+}
+
+.duration-input-group > small {
+  grid-column: 1 / -1;
+  color: var(--green);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  font-weight: 800;
+  text-align: right;
 }
 
 .journal-timer {

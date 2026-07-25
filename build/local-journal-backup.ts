@@ -36,7 +36,7 @@ const JOURNAL_COLUMNS = [
   ["Approach & Reasoning", 18],
   ["Complexity Analysis", 18],
   ["Edge-Case Coverage", 17],
-  ["Explanation Quality", 17],
+  ["Reasoning Clarity", 17],
   ["Missing Inputs", 30],
   ["Issues to Fix", 38],
   ["Next Action", 34],
@@ -54,7 +54,6 @@ const JOURNAL_COLUMNS = [
   ["Optimal Space", 22],
   ["Edge Cases & Tests", 38],
   ["Mistakes / Bug Cause", 38],
-  ["60-Second Explanation", 42],
   ["Hints Used", 26],
   ["Last Synced", 20],
 ] as const;
@@ -103,11 +102,18 @@ function csvValue(value: string | number | undefined) {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
+function journalValue(row: JournalRow, header: string) {
+  if (header === "Reasoning Clarity") {
+    return row[header] ?? row["Explanation Quality"];
+  }
+  return row[header];
+}
+
 function toCsv(rows: JournalRow[]) {
   const headers = JOURNAL_COLUMNS.map(([header]) => header);
   return [
     headers.map(csvValue).join(","),
-    ...rows.map((row) => headers.map((header) => csvValue(row[header])).join(",")),
+    ...rows.map((row) => headers.map((header) => csvValue(journalValue(row, header))).join(",")),
   ].join("\n");
 }
 
@@ -132,7 +138,7 @@ async function writeLocalWorkbook(rows: JournalRow[], xlsxPath: string) {
     key: header,
     width,
   }));
-  journal.autoFilter = { from: "A1", to: "AM1" };
+  journal.autoFilter = { from: "A1", to: "AL1" };
   journal.views = [{ state: "frozen", xSplit: 3, ySplit: 1 }];
   journal.getRow(1).height = 34;
   journal.getRow(1).eachCell((cell) => {
@@ -143,7 +149,10 @@ async function writeLocalWorkbook(rows: JournalRow[], xlsxPath: string) {
   });
 
   rows.forEach((record) => {
-    const row = journal.addRow(record);
+    const row = journal.addRow({
+      ...record,
+      "Reasoning Clarity": journalValue(record, "Reasoning Clarity"),
+    });
     row.height = 54;
     row.eachCell((cell, columnNumber) => {
       cell.alignment = {

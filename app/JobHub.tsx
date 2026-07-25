@@ -194,7 +194,6 @@ function hasReviewableInput(item: ProblemProgress) {
     item.complexity,
     item.edgeCases,
     item.mistakes,
-    item.explanation,
   ].some((value) => typeof value === "string" && value.trim());
 }
 
@@ -237,7 +236,6 @@ function formatCoverageLabel(value: string) {
     optimalSpaceComplexity: "Optimal space",
     edgeCaseNotes: "Edge cases & tests",
     mistakes: "Mistakes / bug cause",
-    explanation: "Interview explanation (~60 seconds)",
   };
   return labels[value] || value;
 }
@@ -248,7 +246,7 @@ function scoreCategories(breakdown: NonNullable<CodeReview["scoreBreakdown"]>) {
     { label: "Approach & reasoning", weight: "20%", score: breakdown.approachReasoning },
     { label: "Complexity analysis", weight: "10%", score: breakdown.complexityAnalysis },
     { label: "Edge-case coverage", weight: "10%", score: breakdown.edgeCaseCoverage },
-    { label: "Explanation quality", weight: "20%", score: breakdown.explanationQuality },
+    { label: "Reasoning clarity", weight: "20%", score: breakdown.explanationQuality },
   ];
 }
 
@@ -282,7 +280,7 @@ function journalSheetRow(problem: InterviewProblem, item: ProblemProgress) {
     "Approach & Reasoning": review?.scoreBreakdown?.approachReasoning ?? "",
     "Complexity Analysis": review?.scoreBreakdown?.complexityAnalysis ?? "",
     "Edge-Case Coverage": review?.scoreBreakdown?.edgeCaseCoverage ?? "",
-    "Explanation Quality": review?.scoreBreakdown?.explanationQuality ?? "",
+    "Reasoning Clarity": review?.scoreBreakdown?.explanationQuality ?? "",
     "Missing Inputs": review?.inputCoverage?.missing.map(formatCoverageLabel).join("\n") ?? "",
     "Issues to Fix": review?.issues.map((issue) => `${issue.severity}: ${issue.title} — ${issue.fix}`).join("\n") ?? "",
     "Next Action": review?.nextAction ?? "",
@@ -300,7 +298,6 @@ function journalSheetRow(problem: InterviewProblem, item: ProblemProgress) {
     "Optimal Space": item.optimalSpaceComplexity,
     "Edge Cases & Tests": item.edgeCases,
     "Mistakes / Bug Cause": item.mistakes,
-    "60-Second Explanation": item.explanation,
     "Hints Used": item.hintsUsed.join("\n"),
     "Last Synced": new Date().toISOString(),
   };
@@ -333,7 +330,7 @@ function buildDailyCoaching(progress: Record<string, ProblemProgress>) {
     ["Approach & reasoning", "approachReasoning"],
     ["Complexity analysis", "complexityAnalysis"],
     ["Edge-case coverage", "edgeCaseCoverage"],
-    ["Explanation quality", "explanationQuality"],
+    ["Reasoning clarity", "explanationQuality"],
   ].flatMap(([label, key]) => {
     const scores = recent.flatMap(({ review }) => {
       const breakdown = review.scoreBreakdown;
@@ -545,7 +542,6 @@ function getJournalHints(problem: InterviewProblem) {
     optimalSpace: `Name every growing structure used for ${context.state}, then give the largest auxiliary-space term.`,
     edgeCases: `For ${problem.title}, test ${context.tests}. Include concrete input and expected output for each.`,
     mistakes: `A likely ${problem.title} failure is ${context.failure}. Record whether that happened and the rule that prevents it.`,
-    explanation: `Say: baseline and its cost → ${cue} → ${context.strategy} → final time and space. Keep the explanation specific to ${problem.title}.`,
     code: `In Python 3, ${context.code}. Make the implementation match the invariant ${cue}`,
   };
 }
@@ -1089,7 +1085,7 @@ export default function JobHub() {
   async function evaluateCode() {
     if (!selectedProblem || reviewRunning) return;
     if (!hasReviewableInput(problemDraft)) {
-      setReviewError("Add your code or at least one journal explanation first.");
+      setReviewError("Add your code or at least one journal answer first.");
       return;
     }
 
@@ -1117,7 +1113,6 @@ export default function JobHub() {
           optimalSpaceComplexity: problemDraft.optimalSpaceComplexity,
           edgeCaseNotes: problemDraft.edgeCases,
           mistakes: problemDraft.mistakes,
-          explanation: problemDraft.explanation,
         }),
       });
       const payload = await response.json();
@@ -1284,6 +1279,18 @@ export default function JobHub() {
       const normalized = Math.max(minimumOffset, Math.min(maximumOffset, current));
       return Math.max(minimumOffset, Math.min(maximumOffset, normalized + step));
     });
+  }
+
+  function updateLoggedTime(nextMinutes: number, nextSeconds: number) {
+    const safeMinutes = Math.max(0, Math.floor(nextMinutes || 0));
+    const safeSeconds = Math.max(0, Math.min(59, Math.floor(nextSeconds || 0)));
+    const totalSeconds = safeMinutes * 60 + safeSeconds;
+    setProblemDraft((current) => ({
+      ...current,
+      minutes: Math.ceil(totalSeconds / 60),
+      totalSeconds,
+      codeReview: null,
+    }));
   }
 
   function renderOverview() {
@@ -1657,7 +1664,20 @@ export default function JobHub() {
             <div className="journal-status-row">
               <JournalField id="journal-status" label="Status" hint={journalHints.status}><select id="journal-status" aria-describedby="journal-status-hint" value={problemDraft.status} onChange={(event) => setProblemDraft({ ...problemDraft, status: event.target.value as PrepStatus, codeReview: null })}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select></JournalField>
               <JournalField id="journal-confidence" label="Confidence" hint={journalHints.confidence}><select id="journal-confidence" aria-describedby="journal-confidence-hint" value={problemDraft.confidence} onChange={(event) => setProblemDraft({ ...problemDraft, confidence: Number(event.target.value), codeReview: null })}><option value="0">Not rated</option><option value="1">1 — Cannot reproduce</option><option value="2">2 — Need notes</option><option value="3">3 — Mostly clear</option><option value="4">4 — Can re-code</option><option value="5">5 — Can explain cold</option></select></JournalField>
-              <JournalField id="journal-seconds" label="Time logged (seconds)" hint={journalHints.minutes}><div className="precise-time-control"><input id="journal-seconds" aria-describedby="journal-seconds-hint journal-time-preview" type="number" min="0" step="1" value={problemDraft.totalSeconds || problemDraft.minutes * 60} onChange={(event) => { const seconds = Math.max(0, Math.floor(Number(event.target.value) || 0)); setProblemDraft({ ...problemDraft, minutes: Math.ceil(seconds / 60), totalSeconds: seconds, codeReview: null }); }} /><small id="journal-time-preview">{formatTimer(problemDraft.totalSeconds || problemDraft.minutes * 60)}</small></div></JournalField>
+              <JournalField id="journal-time-minutes" label="Time logged" hint={journalHints.minutes}>
+                <div className="duration-input-group">
+                  <div className="duration-input">
+                    <input id="journal-time-minutes" aria-label="Time logged minutes" aria-describedby="journal-time-minutes-hint journal-time-preview" type="number" min="0" step="1" inputMode="numeric" value={Math.floor((problemDraft.totalSeconds || problemDraft.minutes * 60) / 60)} onChange={(event) => updateLoggedTime(Number(event.target.value), (problemDraft.totalSeconds || problemDraft.minutes * 60) % 60)} />
+                    <span>min</span>
+                  </div>
+                  <b aria-hidden="true">:</b>
+                  <div className="duration-input">
+                    <input aria-label="Time logged seconds" aria-describedby="journal-time-minutes-hint journal-time-preview" type="number" min="0" max="59" step="1" inputMode="numeric" value={(problemDraft.totalSeconds || problemDraft.minutes * 60) % 60} onChange={(event) => updateLoggedTime(Math.floor((problemDraft.totalSeconds || problemDraft.minutes * 60) / 60), Number(event.target.value))} />
+                    <span>sec</span>
+                  </div>
+                  <small id="journal-time-preview">{formatTimer(problemDraft.totalSeconds || problemDraft.minutes * 60)} total</small>
+                </div>
+              </JournalField>
             </div>
             <div className={`journal-timer ${timerRunning && timerProblemId === selectedProblem.id ? "is-running" : ""}`}>
               <div className="journal-timer-clock"><span>Total practice time</span><strong>{formatTimer((problemDraft.totalSeconds || problemDraft.minutes * 60) + (timerRunning && timerProblemId === selectedProblem.id ? timerSeconds : 0))}</strong></div>
@@ -1678,11 +1698,10 @@ export default function JobHub() {
               <JournalField id="optimal-space" label="Optimal space complexity" hint={journalHints.optimalSpace} penalizeHint onHintShown={() => recordHintUse("optimal-space")}><textarea id="optimal-space" aria-describedby="optimal-space-hint" rows={2} value={problemDraft.optimalSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalSpaceComplexity: event.target.value, codeReview: null })} placeholder="State auxiliary space and explain it." /></JournalField>
               <JournalField id="edge-cases" label="Edge cases & tests" hint={journalHints.edgeCases} penalizeHint onHintShown={() => recordHintUse("edge-cases")}><textarea id="edge-cases" aria-describedby="edge-cases-hint" rows={3} value={problemDraft.edgeCases} onChange={(event) => setProblemDraft({ ...problemDraft, edgeCases: event.target.value, codeReview: null })} placeholder="Empty, duplicates, boundaries…" /></JournalField>
               <JournalField id="mistakes" label="Mistakes / bug cause" hint={journalHints.mistakes} penalizeHint onHintShown={() => recordHintUse("mistakes")}><textarea id="mistakes" aria-describedby="mistakes-hint" rows={3} value={problemDraft.mistakes} onChange={(event) => setProblemDraft({ ...problemDraft, mistakes: event.target.value, codeReview: null })} placeholder="What went wrong and why?" /></JournalField>
-              <JournalField id="interview-explanation" className="journal-wide" label="Interview explanation (about 60 seconds)" hint={journalHints.explanation} penalizeHint onHintShown={() => recordHintUse("interview-explanation")}><textarea id="interview-explanation" aria-describedby="interview-explanation-hint" rows={4} value={problemDraft.explanation} onChange={(event) => setProblemDraft({ ...problemDraft, explanation: event.target.value, codeReview: null })} placeholder="Write what you would actually say aloud to the interviewer in about 60 seconds." /></JournalField>
             </div>
             <section className="code-review-lab" aria-labelledby="code-review-heading">
               <div className="code-review-heading">
-                <div><p className="eyebrow">AI submission coach</p><h3 id="code-review-heading">Score your full {problemDraft.codeLanguage || settings.primaryLanguage} submission.</h3><p>AI reviews your brute force, optimal algorithm, all four complexity answers, spoken explanation, and code as separate evidence.</p></div>
+                <div><p className="eyebrow">AI submission coach</p><h3 id="code-review-heading">Score your full {problemDraft.codeLanguage || settings.primaryLanguage} submission.</h3><p>AI reviews your brute force, optimal algorithm, all four complexity answers, edge cases, mistakes, and code as separate evidence.</p></div>
                 <span className="online-badge"><i />Online research</span>
               </div>
               <div className="independence-panel">
@@ -1695,7 +1714,7 @@ export default function JobHub() {
                 <button className="review-button" disabled={reviewRunning || !hasReviewableInput(problemDraft)} onClick={() => void evaluateCode()}>{reviewRunning ? "Scoring your work…" : problemDraft.codeReview ? "Score again" : "Score all my work"}</button>
               </div>
               <JournalField id="solution-code" className="code-input-label" label={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution`} hint={journalHints.code} penalizeHint onHintShown={() => recordHintUse("solution-code")}><textarea id="solution-code" aria-describedby="solution-code-hint" className="code-input" rows={14} spellCheck={false} value={problemDraft.code} onChange={(event) => setProblemDraft({ ...problemDraft, code: event.target.value, codeReview: null })} placeholder={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution here…`} /></JournalField>
-              {reviewRunning && <div className="review-loading" role="status"><span /><div><strong>Checking your code, reasoning, and explanation…</strong><small>This usually takes under a minute.</small></div></div>}
+              {reviewRunning && <div className="review-loading" role="status"><span /><div><strong>Checking your code and reasoning…</strong><small>This usually takes under a minute.</small></div></div>}
               {reviewError && <div className="review-error" role="alert"><strong>Review could not run</strong><span>{reviewError}</span><small>Your journal stays saved in this browser. If the connection message repeats, confirm Job Hub is still running locally and refresh.</small></div>}
               {problemDraft.codeReview && (
                 <div className="review-result">
@@ -1729,14 +1748,14 @@ export default function JobHub() {
                     <div className="edge-case-grid">{problemDraft.codeReview.edgeCases.map((edgeCase, index) => <article key={`${edgeCase.case}-${index}`}><strong>{edgeCase.case}</strong><span>Expected: {edgeCase.expected}</span><small>{edgeCase.why}</small></article>)}</div>
                   </div>
                   <div className="interview-coach-card">
-                    <p className="eyebrow">Interview explanation</p>
+                    <p className="eyebrow">Communication feedback</p>
                     <div><strong>Strong point</strong><span>{problemDraft.codeReview.interviewFeedback.strongPoint}</span></div>
                     <div><strong>Improve</strong><span>{problemDraft.codeReview.interviewFeedback.improve}</span></div>
-                    <div><strong>60-second outline</strong><span>{problemDraft.codeReview.interviewFeedback.explanationOutline}</span></div>
+                    <div><strong>Clear answer outline</strong><span>{problemDraft.codeReview.interviewFeedback.explanationOutline}</span></div>
                   </div>
                   {problemDraft.codeReview.explanationReview && (
                     <div className="explanation-review-card">
-                      <div><p className="eyebrow">Your written explanation</p><h4>Communication review</h4><p>{problemDraft.codeReview.explanationReview.assessment}</p></div>
+                      <div><p className="eyebrow">Your written reasoning</p><h4>Communication review</h4><p>{problemDraft.codeReview.explanationReview.assessment}</p></div>
                       <section><strong>Accurate points</strong>{problemDraft.codeReview.explanationReview.accuratePoints.length > 0 ? <ul>{problemDraft.codeReview.explanationReview.accuratePoints.map((point) => <li key={point}>{point}</li>)}</ul> : <p>No clearly supported points were provided yet.</p>}</section>
                       <section><strong>Gaps to close</strong>{problemDraft.codeReview.explanationReview.gaps.length > 0 ? <ul>{problemDraft.codeReview.explanationReview.gaps.map((gap) => <li key={gap}>{gap}</li>)}</ul> : <p>No major communication gaps found.</p>}</section>
                       <section className="structure-suggestion"><strong>How to structure your next attempt</strong><p>{problemDraft.codeReview.explanationReview.structureSuggestion}</p></section>
