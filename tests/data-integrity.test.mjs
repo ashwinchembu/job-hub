@@ -97,3 +97,22 @@ test("the invariant hint teaches the proof obligation explicitly", () => {
   assert.match(hubSource, /safely make this decision because/);
   assert.match(hubSource, /proves you never discard a valid answer/);
 });
+
+test("the review language picker uses the polished accessible control", () => {
+  assert.match(hubSource, /className="language-select-shell"/);
+  assert.match(hubSource, /aria-label="Solution language"/);
+  assert.match(hubSource, /languageBadge\(problemDraft\.codeLanguage \|\| settings\.primaryLanguage\)/);
+});
+
+test("progressive hints appear before the grading details", () => {
+  const resultIndex = hubSource.indexOf('<div className="review-result">');
+  const hintsIndex = hubSource.indexOf('<div className="hint-section hint-section-priority">', resultIndex);
+  const scoreIndex = hubSource.indexOf('<div className="review-score-row">', resultIndex);
+  assert.ok(resultIndex >= 0 && hintsIndex > resultIndex && scoreIndex > hintsIndex);
+});
+
+test("Valid Anagram hints distinguish literal brute force from the sorting baseline", () => {
+  assert.match(hubSource, /literal brute force scans for one unused matching character/);
+  assert.match(hubSource, /sorting baseline is O\(n log n\), not O\(log n\)/);
+  assert.match(hubSource, /sorted\(s\) and sorted\(t\) create new lists/);
+});

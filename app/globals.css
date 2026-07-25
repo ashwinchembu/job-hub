@@ -2104,10 +2104,68 @@ textarea:focus-visible {
   font-weight: 750;
 }
 
-.code-review-controls select {
+.language-select-field > span:first-child {
+  color: var(--green);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.language-select-shell {
+  position: relative;
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: 30px 1fr 12px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 0 8px;
+  border: 1px solid #c9d8d0;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 5px 16px rgba(17, 54, 42, 0.05);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.language-select-shell:focus-within {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(36, 97, 63, 0.11);
+}
+
+.language-select-shell > b {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--mint);
+  color: var(--green);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.language-select-shell select {
   width: 100%;
-  min-height: 42px;
-  padding: 9px 11px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  appearance: none;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.language-select-shell > i {
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid var(--green);
+  border-bottom: 1.5px solid var(--green);
+  pointer-events: none;
+  transform: translateY(-2px) rotate(45deg);
 }
 
 .code-review-controls > span {
@@ -2615,6 +2673,24 @@ textarea:focus-visible {
 .hint-section {
   padding: 20px 22px;
   border-top: 1px solid var(--line);
+}
+
+.hint-section-priority {
+  border-top: 0;
+  border-bottom: 1px solid #cfe1d6;
+  background: linear-gradient(135deg, #f0f8f3, #fbfcf8);
+}
+
+.hint-section-intro {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.hint-section-priority .hint-ladder details {
+  border-color: #c7dccf;
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .hint-ladder {

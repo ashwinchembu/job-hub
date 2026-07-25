@@ -202,6 +202,22 @@ function normalizeLanguage(language?: string) {
   return language;
 }
 
+function languageBadge(language: string) {
+  const badges: Record<string, string> = {
+    "Python 3": "Py",
+    TypeScript: "TS",
+    JavaScript: "JS",
+    Java: "Jv",
+    "C++": "C+",
+    "C#": "C#",
+    Go: "Go",
+    Rust: "Rs",
+    Swift: "Sw",
+    Kotlin: "Kt",
+  };
+  return badges[normalizeLanguage(language)] ?? "</>";
+}
+
 function normalizeStoredProgress(item?: Partial<ProblemProgress>): ProblemProgress {
   const normalized: ProblemProgress = {
     ...emptyProgress,
@@ -398,6 +414,15 @@ function JournalField({
 
 function getProblemHintContext(problem: InterviewProblem) {
   const pattern = problem.pattern.toLowerCase();
+  if (problem.id === 242) return {
+    strategy: "a frequency table that records how many copies of each character are still needed",
+    bruteForce: "the literal brute force scans for one unused matching character in the other string for every character, which is O(n²). Sorting both strings and comparing them is also a valid baseline, but it improves that to O(n log n)",
+    state: "each count equals occurrences in s minus occurrences consumed from the processed prefix of t, and no count may fall below zero",
+    operation: "the two string passes and constant-time expected dictionary updates",
+    tests: "different lengths, repeated letters, the same letters in different orders, and one mismatched character",
+    failure: "calling max on an empty count map, forgetting the length mismatch, or allowing a character count to go below zero",
+    code: "check the lengths first, increment counts from s, reject any unavailable character from t, and return true after every character is consumed",
+  };
   if (pattern.includes("sql")) return {
     strategy: "the join, grouping, or ranking operation named by the cue",
     bruteForce: "describe the table relationships and rows you must preserve before writing SQL",
@@ -534,8 +559,12 @@ function getJournalHints(problem: InterviewProblem) {
     confidence: `Can you explain why ${cue} is true and reproduce the ${problem.pattern} solution tomorrow without notes?`,
     minutes: `${problem.title} has a ${problem.targetMinutes}-minute target. Include thinking, coding, and testing time.`,
     bruteForceApproach: `${problem.title}: ${context.bruteForce}. Then state when that baseline finds the answer.`,
-    bruteForceTime: `For ${problem.title}, count the exhaustive candidates or repeated work before applying the insight ${cue}`,
-    bruteForceSpace: `For the baseline ${problem.title} solution, count only auxiliary storage and recursion; name what grows with the input.`,
+    bruteForceTime: problem.id === 242
+      ? "Literal repeated matching is O(n²). Your sorting baseline is O(n log n), not O(log n), because sorting n characters dominates the final comparison."
+      : `For ${problem.title}, count the exhaustive candidates or repeated work before applying the insight ${cue}`,
+    bruteForceSpace: problem.id === 242
+      ? "In Python, sorted(s) and sorted(t) create new lists, so the sorting baseline uses O(n) auxiliary space for equal-length strings—not O(1)."
+      : `For the baseline ${problem.title} solution, count only auxiliary storage and recursion; name what grows with the input.`,
     invariant: `For ${problem.title}, write three sentences: (1) “Before each step, ${context.state} represents ___.” (2) “That means I can safely make this decision because ___.” (3) “After I update the state, the same statement is still true because ___.” Connect every blank to ${cue}. An invariant is not just what your data structure stores—it is the promise that stays true before and after every loop or recursive call and proves you never discard a valid answer.`,
     optimalSteps: `Build the ${problem.title} procedure around ${context.strategy}. Write the initialization, repeated decision, update, and return in order.`,
     optimalTime: `For this ${problem.pattern} solution, justify time using ${context.operation}; do not give Big-O without the reason.`,
@@ -1709,7 +1738,14 @@ export default function JobHub() {
                 <div className="independence-value"><strong>{currentIndependenceScore}</strong><span>/100</span><small>{problemDraft.hintsUsed.length} hint{problemDraft.hintsUsed.length === 1 ? "" : "s"} used</small></div>
               </div>
               <div className="code-review-controls">
-                <label>Language<select value={problemDraft.codeLanguage || settings.primaryLanguage} onChange={(event) => setProblemDraft({ ...problemDraft, codeLanguage: event.target.value, codeReview: null })}><option>Python 3</option><option>TypeScript</option><option>JavaScript</option><option>Java</option><option>C++</option><option>C#</option><option>Go</option><option>Rust</option><option>Swift</option><option>Kotlin</option></select></label>
+                <label className="language-select-field">
+                  <span>Solution language</span>
+                  <span className="language-select-shell">
+                    <b aria-hidden="true">{languageBadge(problemDraft.codeLanguage || settings.primaryLanguage)}</b>
+                    <select aria-label="Solution language" value={problemDraft.codeLanguage || settings.primaryLanguage} onChange={(event) => setProblemDraft({ ...problemDraft, codeLanguage: event.target.value, codeReview: null })}><option>Python 3</option><option>TypeScript</option><option>JavaScript</option><option>Java</option><option>C++</option><option>C#</option><option>Go</option><option>Rust</option><option>Swift</option><option>Kotlin</option></select>
+                    <i aria-hidden="true" />
+                  </span>
+                </label>
                 <span>Your code and journal answers are sent to OpenAI only when you request a review.</span>
                 <button className="review-button" disabled={reviewRunning || !hasReviewableInput(problemDraft)} onClick={() => void evaluateCode()}>{reviewRunning ? "Scoring your work…" : problemDraft.codeReview ? "Score again" : "Score all my work"}</button>
               </div>
@@ -1718,6 +1754,13 @@ export default function JobHub() {
               {reviewError && <div className="review-error" role="alert"><strong>Review could not run</strong><span>{reviewError}</span><small>Your journal stays saved in this browser. If the connection message repeats, confirm Job Hub is still running locally and refresh.</small></div>}
               {problemDraft.codeReview && (
                 <div className="review-result">
+                  {problemDraft.codeReview.hints && problemDraft.codeReview.hints.length > 0 && (
+                    <div className="hint-section hint-section-priority">
+                      <div className="review-section-title"><p className="eyebrow">Progressive hints first</p><h4>Try these before reading your grade</h4></div>
+                      <p className="hint-section-intro">Open one hint at a time, make another attempt, then continue to the grading details below.</p>
+                      <div className="hint-ladder">{problemDraft.codeReview.hints.map((hint, index) => <details key={`${hint.level}-${index}`} onToggle={(event) => event.currentTarget.open && recordHintUse(`ai-review-hint-${index}`)}><summary><span>{index + 1}</span><strong>{hint.level}</strong><small>Reveal · −{HINT_PENALTY} independence</small></summary><p>{hint.text}</p></details>)}</div>
+                    </div>
+                  )}
                   <div className="review-score-row">
                     <div className={`verdict-badge verdict-${problemDraft.codeReview.verdict.toLowerCase().replaceAll(" ", "-")}`}>{problemDraft.codeReview.verdict}</div>
                     <div className="review-score"><small>Final submission</small><div><strong>{problemDraft.codeReview.score}</strong><span>/100</span></div></div>
@@ -1759,12 +1802,6 @@ export default function JobHub() {
                       <section><strong>Accurate points</strong>{problemDraft.codeReview.explanationReview.accuratePoints.length > 0 ? <ul>{problemDraft.codeReview.explanationReview.accuratePoints.map((point) => <li key={point}>{point}</li>)}</ul> : <p>No clearly supported points were provided yet.</p>}</section>
                       <section><strong>Gaps to close</strong>{problemDraft.codeReview.explanationReview.gaps.length > 0 ? <ul>{problemDraft.codeReview.explanationReview.gaps.map((gap) => <li key={gap}>{gap}</li>)}</ul> : <p>No major communication gaps found.</p>}</section>
                       <section className="structure-suggestion"><strong>How to structure your next attempt</strong><p>{problemDraft.codeReview.explanationReview.structureSuggestion}</p></section>
-                    </div>
-                  )}
-                  {problemDraft.codeReview.hints && problemDraft.codeReview.hints.length > 0 && (
-                    <div className="hint-section">
-                      <div className="review-section-title"><p className="eyebrow">Progressive hints</p><h4>Reveal only as much as you need</h4></div>
-                      <div className="hint-ladder">{problemDraft.codeReview.hints.map((hint, index) => <details key={`${hint.level}-${index}`} onToggle={(event) => event.currentTarget.open && recordHintUse(`ai-review-hint-${index}`)}><summary><span>{index + 1}</span><strong>{hint.level}</strong><small>Reveal · −{HINT_PENALTY} independence</small></summary><p>{hint.text}</p></details>)}</div>
                     </div>
                   )}
                   {problemDraft.codeReview.sources.length > 0 && <div className="review-sources"><span>References checked</span>{problemDraft.codeReview.sources.map((source) => <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>{source.title} ↗</a>)}</div>}
