@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { BLIND_75_TOTAL, blind75CoverageCount, interviewPlan, InterviewProblem, weekThemes } from "./data";
 
 type View = "overview" | "applications" | "prep" | "data";
@@ -144,7 +144,7 @@ type LocalJournalBackupState = {
 const APPLICATIONS_KEY = "job-hub:applications:v1";
 const PROGRESS_KEY = "job-hub:problem-progress:v1";
 const SETTINGS_KEY = "job-hub:settings:v1";
-const SHEET_SYNC_INTERVAL_MS = 30_000;
+const BACKEND_SYNC_DELAY_MS = 700;
 const HINT_PENALTY = 10;
 const LAST_PLAN_INDEX = interviewPlan.length - 1;
 
@@ -770,7 +770,7 @@ export default function JobHub() {
   const [reviewError, setReviewError] = useState("");
   const [localJournalBackup, setLocalJournalBackup] = useState<LocalJournalBackupState>({
     status: "ready",
-    message: "Every journal save is also written to a local Excel workbook.",
+    message: "Every journal save is synced to your private Sites database.",
     rowCount: 0,
     jsonPath: "private-data/job-hub-journals.json",
     csvPath: "private-data/job-hub-journals.csv",
@@ -787,75 +787,51 @@ export default function JobHub() {
     message: "Connecting to the project tracker…",
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const syncInFlightRef = useRef(false);
   const localBackupHydratedRef = useRef(false);
-
-  const syncApplicationsFromSheet = useCallback(async (announce = false) => {
-    if (syncInFlightRef.current) return;
-    syncInFlightRef.current = true;
-    setSheetSync((current) => ({
-      ...current,
-      status: current.status === "connected" && !announce ? "connected" : "connecting",
-      message: "Checking the project tracker…",
-    }));
-    try {
-      const response = await fetch("/api/job-tracker", { cache: "no-store" });
-      const payload = await response.json();
-      if (!response.ok || !Array.isArray(payload.applications)) {
-        throw new Error(payload.error || "The project tracker could not be read.");
-      }
-
-      const sheetApplications = payload.applications as Application[];
-      const sheetKeys = new Set(sheetApplications.map(applicationKey));
-      setApplications((current) => [
-        ...sheetApplications,
-        ...current.filter(
-          (application) =>
-            !application.sheetSynced && !application.demo && !sheetKeys.has(applicationKey(application)),
-        ),
-      ]);
-      setSheetSync({
-        status: "connected",
-        workbook: payload.source.workbook,
-        modifiedAt: payload.source.modifiedAt,
-        checkedAt: payload.source.checkedAt,
-        rowCount: payload.source.rowCount,
-        message: "Applications are current with the workbook.",
-      });
-      if (announce) setToast(`${payload.source.rowCount} applications synced from the workbook`);
-    } catch (error) {
-      setSheetSync((current) => ({
-        ...current,
-        status: "error",
-        checkedAt: new Date().toISOString(),
-        message: error instanceof Error ? error.message : "The project tracker could not be read.",
-      }));
-      if (announce) setToast("Workbook sync failed");
-    } finally {
-      syncInFlightRef.current = false;
-    }
-  }, []);
+  const backendHydratedRef = useRef(false);
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
+    let cancelled = false;
+    const hydrate = async () => {
       const localToday = toISODate();
       const storedApplications = localStorage.getItem(APPLICATIONS_KEY);
       const storedProgress = localStorage.getItem(PROGRESS_KEY);
       const storedSettings = localStorage.getItem(SETTINGS_KEY);
-      setApplications(storedApplications ? JSON.parse(storedApplications) : makeDemoApplications(localToday));
-      if (storedProgress) {
-        const savedProgress = JSON.parse(storedProgress) as Record<string, Partial<ProblemProgress>>;
+      try {
+        const response = await fetch("/api/state", { cache: "no-store" });
+        if (!response.ok) throw new Error("Backend state is unavailable.");
+        const backend = await response.json();
+        if (cancelled) return;
+        const localApplications = storedApplications ? JSON.parse(storedApplications) as Application[] : [];
+        const backendApplications = Array.isArray(backend.applications) ? backend.applications as Application[] : [];
+        const backendKeys = new Set(backendApplications.map(applicationKey));
+        setApplications([
+          ...backendApplications,
+          ...localApplications.filter((item) => !item.demo && !backendKeys.has(applicationKey(item))),
+        ]);
+        const savedProgress = (backend.progress && typeof backend.progress === "object"
+          ? backend.progress
+          : storedProgress ? JSON.parse(storedProgress) : {}) as Record<string, Partial<ProblemProgress>>;
         setProgress(Object.fromEntries(Object.entries(savedProgress).map(([id, item]) => [id, normalizeStoredProgress(item)])));
-      } else {
-        setProgress({});
-      }
-      if (storedSettings) {
-        const savedSettings = JSON.parse(storedSettings) as Settings;
+        const savedSettings = (backend.settings && typeof backend.settings === "object"
+          ? backend.settings
+          : storedSettings ? JSON.parse(storedSettings) : { startDate: localToday, primaryLanguage: "Python 3", weeklyGoal: 7 }) as Settings;
         setSettings({ ...savedSettings, primaryLanguage: normalizeLanguage(savedSettings.primaryLanguage) });
+        setSheetSync({ status: "connected", workbook: "Sites database", modifiedAt: backend.updatedAt ?? "", checkedAt: new Date().toISOString(), rowCount: backendApplications.length, message: "Applications and prep are synced across your devices." });
+      } catch {
+        setApplications(storedApplications ? JSON.parse(storedApplications) : makeDemoApplications(localToday));
+        if (storedProgress) {
+          const savedProgress = JSON.parse(storedProgress) as Record<string, Partial<ProblemProgress>>;
+          setProgress(Object.fromEntries(Object.entries(savedProgress).map(([id, item]) => [id, normalizeStoredProgress(item)])));
+        }
+        if (storedSettings) setSettings(JSON.parse(storedSettings));
+        setSheetSync((current) => ({ ...current, status: "error", message: "Backend sync is temporarily unavailable; this browser copy is still safe." }));
       }
+      backendHydratedRef.current = true;
       setReady(true);
-    });
-    return () => window.cancelAnimationFrame(frame);
+    };
+    void hydrate();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -864,41 +840,24 @@ export default function JobHub() {
   }, [applications, ready]);
 
   useEffect(() => {
-    if (!ready) return;
-    void syncApplicationsFromSheet();
-    const interval = window.setInterval(() => void syncApplicationsFromSheet(), SHEET_SYNC_INTERVAL_MS);
-    const syncOnFocus = () => void syncApplicationsFromSheet();
-    const syncOnVisible = () => {
-      if (document.visibilityState === "visible") void syncApplicationsFromSheet();
-    };
-    window.addEventListener("focus", syncOnFocus);
-    window.addEventListener("online", syncOnFocus);
-    document.addEventListener("visibilitychange", syncOnVisible);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("focus", syncOnFocus);
-      window.removeEventListener("online", syncOnFocus);
-      document.removeEventListener("visibilitychange", syncOnVisible);
-    };
-  }, [ready, syncApplicationsFromSheet]);
-
-  useEffect(() => {
-    if (!ready || typeof EventSource === "undefined") return;
-    const liveUpdates = new EventSource("/api/job-tracker/stream");
-    const refreshFromWorkbook = () => {
-      setToast("Workbook saved · refreshing applications");
-      void syncApplicationsFromSheet();
-      window.setTimeout(() => void syncApplicationsFromSheet(), 900);
-    };
-    liveUpdates.onopen = () => setLiveSyncConnected(true);
-    liveUpdates.onerror = () => setLiveSyncConnected(false);
-    liveUpdates.addEventListener("workbook-change", refreshFromWorkbook);
-    return () => {
-      liveUpdates.removeEventListener("workbook-change", refreshFromWorkbook);
-      liveUpdates.close();
-      setLiveSyncConnected(false);
-    };
-  }, [ready, syncApplicationsFromSheet]);
+    if (!ready || !backendHydratedRef.current) return;
+    const timeout = window.setTimeout(async () => {
+      try {
+        const response = await fetch("/api/state", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ applications, progress, settings }),
+        });
+        if (!response.ok) throw new Error("Backend save failed");
+        setLiveSyncConnected(true);
+        setSheetSync((current) => ({ ...current, status: "connected", workbook: "Sites database", checkedAt: new Date().toISOString(), rowCount: applications.length, message: "Applications and prep are synced across your devices." }));
+      } catch {
+        setLiveSyncConnected(false);
+        setSheetSync((current) => ({ ...current, status: "error", message: "Backend sync needs attention; this browser copy is still safe." }));
+      }
+    }, BACKEND_SYNC_DELAY_MS);
+    return () => window.clearTimeout(timeout);
+  }, [applications, progress, ready, settings]);
 
   useEffect(() => {
     if (!ready) return;
@@ -1294,7 +1253,7 @@ export default function JobHub() {
   }
 
   function clearAll() {
-    if (!window.confirm("Delete all local Job Hub data from this browser? Export a backup first if you need one.")) return;
+    if (!window.confirm("Delete all synced Job Hub data from the backend and this browser? Export a backup first if you need one.")) return;
     setApplications([]);
     setProgress({});
     showToast("Local data cleared");
@@ -1597,13 +1556,13 @@ export default function JobHub() {
   function renderData() {
     return (
       <>
-        <section className="page-heading"><div><p className="eyebrow">Your data</p><h1>You own the record.</h1><p>Applications come from the local job workbook. Coding journals and AI scores are written to their own local Excel workbook beside this app.</p></div></section>
+        <section className="page-heading"><div><p className="eyebrow">Your data</p><h1>Private and synced.</h1><p>Applications, coding progress, journals, settings, and AI scores now live in your private Sites database and follow you across devices.</p></div></section>
         <section className="data-grid">
           <article className="data-card local-journal-card">
             <div className="data-icon">⌂</div>
             <div>
               <div className="data-card-title-row">
-                <div><h2>Local Excel journal</h2><p>Every journal save and AI review updates this private workbook automatically, just like the local applications tracker.</p></div>
+                <div><h2>Sites database</h2><p>Your full Job Hub state is saved to the backend automatically. The local Excel journal remains an optional extra backup when you run the app on a Mac.</p></div>
                 <span className={`backup-status-badge sync-${localJournalBackup.status}`}>{localJournalBackup.status === "saved" ? "Saved" : localJournalBackup.status === "saving" ? "Saving" : localJournalBackup.status === "error" ? "Needs attention" : "Ready"}</span>
               </div>
               <div className="local-backup-paths">
@@ -1618,9 +1577,9 @@ export default function JobHub() {
           </article>
           <article className="data-card featured"><div className="data-icon">↓</div><div><h2>Export a backup</h2><p>Download applications, coding progress, journals, and settings as one JSON file.</p><button className="primary-button" onClick={exportBackup}>Download backup</button></div></article>
           <article className="data-card"><div className="data-icon">↑</div><div><h2>Import data</h2><p>Restore a Job Hub JSON backup, or import an Applications CSV from your spreadsheet.</p><button className="secondary-button" onClick={() => fileInputRef.current?.click()}>Choose JSON or CSV</button></div></article>
-          <article className="data-card"><div className="data-icon">↻</div><div><h2>Workbook connection</h2><p>{sheetSync.status === "connected" ? `${sheetSync.rowCount} rows connected from ${sheetSync.workbook}. ${liveSyncConnected ? "Live updates are connected and refresh immediately after a save." : "Live updates are reconnecting; the 30-second fallback remains active."}` : sheetSync.message}</p><button className="secondary-button" disabled={sheetSync.status === "connecting"} onClick={() => void syncApplicationsFromSheet(true)}>Sync applications now</button></div></article>
+          <article className="data-card"><div className="data-icon">↻</div><div><h2>Backend connection</h2><p>{sheetSync.status === "connected" ? `${sheetSync.rowCount} applications are stored in ${sheetSync.workbook}. ${liveSyncConnected ? "Changes are saving automatically." : "The connection is being restored."}` : sheetSync.message}</p><button className="secondary-button" onClick={() => window.location.reload()}>Refresh from backend</button></div></article>
           <article className="data-card"><div className="data-icon">↺</div><div><h2>Restore demo</h2><p>Bring back three clearly labeled sample applications and reset the coding plan.</p><button className="secondary-button" onClick={resetDemo}>Restore demo data</button></div></article>
-          <article className="data-card danger-card"><div className="data-icon">×</div><div><h2>Clear local data</h2><p>Remove all applications and prep journals saved in this browser. This cannot be undone.</p><button className="danger-button" onClick={clearAll}>Clear everything</button></div></article>
+          <article className="data-card danger-card"><div className="data-icon">×</div><div><h2>Clear synced data</h2><p>Remove all applications and prep journals from the private backend and this browser. This cannot be undone.</p><button className="danger-button" onClick={clearAll}>Clear everything</button></div></article>
         </section>
         <section className="import-guide"><p className="eyebrow">CSV import columns</p><h2>Works with a simple application export.</h2><p>Job Hub recognizes columns such as <code>Company</code>, <code>Role</code>, <code>Location</code>, <code>Status</code>, <code>Application Date</code>, <code>Min Base</code>, <code>Max Base</code>, <code>Source</code>, <code>Job URL</code>, and <code>Notes</code>.</p></section>
       </>

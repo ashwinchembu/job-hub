@@ -4,9 +4,10 @@ import test from "node:test";
 
 const dataSource = await readFile(new URL("../app/data.ts", import.meta.url), "utf8");
 const hubSource = await readFile(new URL("../app/JobHub.tsx", import.meta.url), "utf8");
-const trackerSource = await readFile(new URL("../build/local-job-tracker.ts", import.meta.url), "utf8");
 const codeReviewSource = await readFile(new URL("../build/local-code-review.ts", import.meta.url), "utf8");
 const localBackupSource = await readFile(new URL("../build/local-journal-backup.ts", import.meta.url), "utf8");
+const workerSource = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
+const hostingConfig = JSON.parse(await readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"));
 
 function numbersFrom(source) {
   return [...source.matchAll(/\b\d+\b/g)].map((match) => Number(match[0]));
@@ -32,19 +33,12 @@ test("hint independence and final submission remain separate scores", () => {
   assert.match(hubSource, /hintsUsed: string\[\]/);
 });
 
-test("application sync covers interval, visibility, focus, and reconnect", () => {
-  assert.match(hubSource, /SHEET_SYNC_INTERVAL_MS = 30_000/);
-  assert.match(hubSource, /addEventListener\("focus"/);
-  assert.match(hubSource, /addEventListener\("online"/);
-  assert.match(hubSource, /addEventListener\("visibilitychange"/);
-});
-
-test("workbook saves stream to the app as live updates", () => {
-  assert.match(trackerSource, /watchFile\(trackerPath/);
-  assert.match(trackerSource, /event: workbook-change/);
-  assert.match(trackerSource, /request.method === "POST" && isWebhook/);
-  assert.match(hubSource, /new EventSource\("\/api\/job-tracker\/stream"\)/);
-  assert.match(hubSource, /setLiveSyncConnected\(true\)/);
+test("applications, journals, progress, and settings sync through the Sites backend", () => {
+  assert.equal(hostingConfig.d1, "DB");
+  assert.match(workerSource, /url\.pathname === "\/api\/state"/);
+  assert.match(workerSource, /ON CONFLICT\(id\) DO UPDATE/);
+  assert.match(hubSource, /fetch\("\/api\/state"/);
+  assert.match(hubSource, /JSON\.stringify\(\{ applications, progress, settings \}\)/);
 });
 
 test("practice and sync timing retain second precision", () => {
