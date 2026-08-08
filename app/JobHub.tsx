@@ -898,6 +898,11 @@ export default function JobHub() {
   const planDayIndex = Math.max(0, Math.min(LAST_PLAN_INDEX, dayDifference(settings.startDate, today)));
   const todayProblem = interviewPlan[planDayIndex];
   const currentWeek = todayProblem.week;
+  const earliestUnsolvedIndex = interviewPlan.findIndex((problem) => {
+    const status = progress[String(problem.id)]?.status ?? "Not Started";
+    return !["Solved with Hint", "Solved Independently"].includes(status);
+  });
+  const focusAnchorIndex = earliestUnsolvedIndex === -1 ? LAST_PLAN_INDEX : earliestUnsolvedIndex;
 
   const filteredApplications = useMemo(() => {
     const query = applicationSearch.toLowerCase().trim();
@@ -1262,8 +1267,8 @@ export default function JobHub() {
   function moveFocusCarousel(step: -1 | 1) {
     setFocusSlideDirection(step > 0 ? "forward" : "back");
     setFocusDayOffset((current) => {
-      const minimumOffset = -planDayIndex;
-      const maximumOffset = LAST_PLAN_INDEX - planDayIndex;
+      const minimumOffset = -focusAnchorIndex;
+      const maximumOffset = LAST_PLAN_INDEX - focusAnchorIndex;
       const normalized = Math.max(minimumOffset, Math.min(maximumOffset, current));
       return Math.max(minimumOffset, Math.min(maximumOffset, normalized + step));
     });
@@ -1282,9 +1287,9 @@ export default function JobHub() {
   }
 
   function renderOverview() {
-    const focusProblemIndex = Math.max(0, Math.min(LAST_PLAN_INDEX, planDayIndex + focusDayOffset));
+    const focusProblemIndex = Math.max(0, Math.min(LAST_PLAN_INDEX, focusAnchorIndex + focusDayOffset));
     const focusProblem = interviewPlan[focusProblemIndex];
-    const focusOffset = focusProblemIndex - planDayIndex;
+    const focusOffset = focusProblemIndex - focusAnchorIndex;
     const focusProgress = progress[String(focusProblem.id)] ?? emptyProgress;
     const focusTimerActive = timerRunning && timerProblemId === focusProblem.id;
     const focusWorkingSeconds = (focusProgress.totalSeconds || focusProgress.minutes * 60) + (focusTimerActive ? timerSeconds : 0);
@@ -1293,14 +1298,10 @@ export default function JobHub() {
     const focusScheduledDate = addDays(settings.startDate, focusProblem.day - 1);
     const focusDayLabel =
       focusOffset === 0
-        ? "Today"
-        : focusOffset === 1
-          ? "Tomorrow"
-          : focusOffset === -1
-            ? "Yesterday"
-            : focusOffset < 0
-              ? `${Math.abs(focusOffset)} days ago`
-              : `In ${focusOffset} days`;
+        ? earliestUnsolvedIndex === -1 ? "Plan complete" : "Earliest unfinished"
+        : focusOffset < 0
+          ? "Earlier in plan"
+          : "Later in plan";
     const focusDateLabel = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(new Date(`${focusScheduledDate}T12:00:00`));
     const currentWeekProblems = interviewPlan.filter((problem) => problem.week === currentWeek);
     const currentWeekSolved = currentWeekProblems.filter((problem) => ["Solved with Hint", "Solved Independently"].includes(progress[String(problem.id)]?.status)).length;
@@ -1386,7 +1387,7 @@ export default function JobHub() {
 
         <section className="overview-grid">
           <article className="focus-card">
-            <button className="focus-carousel-arrow focus-carousel-previous" type="button" aria-label={focusOffset === 1 ? "Back to today's problem" : "Show previous or completed problem"} disabled={focusProblemIndex === 0} onClick={() => moveFocusCarousel(-1)}>‹</button>
+            <button className="focus-carousel-arrow focus-carousel-previous" type="button" aria-label={focusOffset === 1 ? "Back to earliest unfinished problem" : "Show previous or completed problem"} disabled={focusProblemIndex === 0} onClick={() => moveFocusCarousel(-1)}>‹</button>
             <div className={`focus-card-content slide-${focusSlideDirection}`} key={focusProblem.id} aria-live="polite">
               <div className="card-heading-row">
                 <div><p className="eyebrow">{focusDayLabel} · {focusDateLabel} · Day {focusProblem.day}</p><h2>{focusProblem.title}</h2></div>
@@ -1414,7 +1415,7 @@ export default function JobHub() {
                 <span>{focusProblemIndex + 1} of {interviewPlan.length}</span>
               </div>
             </div>
-            <button className="focus-carousel-arrow focus-carousel-next" type="button" aria-label={focusOffset === 0 ? "Show tomorrow's problem" : "Show next scheduled problem"} disabled={focusProblemIndex === interviewPlan.length - 1} onClick={() => moveFocusCarousel(1)}>›</button>
+            <button className="focus-carousel-arrow focus-carousel-next" type="button" aria-label={focusOffset === 0 ? "Show the next problem in the plan" : "Show next scheduled problem"} disabled={focusProblemIndex === interviewPlan.length - 1} onClick={() => moveFocusCarousel(1)}>›</button>
           </article>
 
           <article className="pipeline-card">

@@ -66,11 +66,13 @@ test("daily coaching uses the latest three scored journals", () => {
   assert.match(hubSource, /Do this next/);
 });
 
-test("the overview carousel can move backward through completed problems", () => {
-  assert.match(hubSource, /const minimumOffset = -planDayIndex/);
-  assert.match(hubSource, /Math\.max\(0, Math\.min\(LAST_PLAN_INDEX, planDayIndex \+ focusDayOffset\)\)/);
+test("the overview carousel starts at the earliest unfinished problem and can move backward", () => {
+  assert.match(hubSource, /const earliestUnsolvedIndex = interviewPlan\.findIndex/);
+  assert.match(hubSource, /const focusAnchorIndex = earliestUnsolvedIndex === -1 \? LAST_PLAN_INDEX : earliestUnsolvedIndex/);
+  assert.match(hubSource, /const minimumOffset = -focusAnchorIndex/);
+  assert.match(hubSource, /Math\.max\(0, Math\.min\(LAST_PLAN_INDEX, focusAnchorIndex \+ focusDayOffset\)\)/);
+  assert.match(hubSource, /Earliest unfinished/);
   assert.match(hubSource, /Show previous or completed problem/);
-  assert.match(hubSource, /focusOffset === -1/);
 });
 
 test("journal saves and AI reviews update the private local Excel workbook", () => {
