@@ -33,6 +33,18 @@ test("hint independence and final submission remain separate scores", () => {
   assert.match(hubSource, /hintsUsed: string\[\]/);
 });
 
+test("hints only appear on fields where solution guidance is useful", () => {
+  assert.match(hubSource, /hint\?: string/);
+  assert.match(hubSource, /\{hint && <button/);
+  assert.match(hubSource, /<JournalField id="journal-status" label="Status">/);
+  assert.match(hubSource, /<JournalField id="journal-confidence" label="Confidence">/);
+  assert.match(hubSource, /<JournalField id="journal-time-minutes" label="Time logged">/);
+  assert.match(hubSource, /<JournalField id="mistakes" label="Mistakes \/ bug cause">/);
+  assert.match(hubSource, /<JournalField id="solution-code" className="code-input-label" label=/);
+  assert.doesNotMatch(hubSource, /recordHintUse\("mistakes"\)/);
+  assert.doesNotMatch(hubSource, /recordHintUse\("solution-code"\)/);
+});
+
 test("applications, journals, progress, and settings sync through the Sites backend", () => {
   assert.equal(hostingConfig.d1, "DB");
   assert.match(workerSource, /url\.pathname === "\/api\/state"/);

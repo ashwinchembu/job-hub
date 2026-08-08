@@ -388,7 +388,7 @@ function JournalField({
 }: {
   id: string;
   label: string;
-  hint: string;
+  hint?: string;
   className?: string;
   penalizeHint?: boolean;
   onHintShown?: () => void;
@@ -404,9 +404,9 @@ function JournalField({
     <div className={`journal-field ${className}`}>
       <div className="journal-field-heading">
         <label htmlFor={id}>{label}</label>
-        <button type="button" className="journal-hint-button" aria-expanded={showHint} aria-controls={hintId} onClick={toggleHint}>{showHint ? "Hide hint" : `Show hint${penalizeHint ? ` · −${HINT_PENALTY}` : ""}`}</button>
+        {hint && <button type="button" className="journal-hint-button" aria-expanded={showHint} aria-controls={hintId} onClick={toggleHint}>{showHint ? "Hide hint" : `Show hint${penalizeHint ? ` · −${HINT_PENALTY}` : ""}`}</button>}
       </div>
-      {showHint && <p className="journal-hint" id={hintId}><b>Hint</b>{hint}</p>}
+      {hint && showHint && <p className="journal-hint" id={hintId}><b>Hint</b>{hint}</p>}
       {children}
     </div>
   );
@@ -555,9 +555,6 @@ function getJournalHints(problem: InterviewProblem) {
   const context = getProblemHintContext(problem);
   const cue = `“${problem.cue}”`;
   return {
-    status: `For ${problem.title}, use Attempted until you can complete and explain the solution without relying on the answer.`,
-    confidence: `Can you explain why ${cue} is true and reproduce the ${problem.pattern} solution tomorrow without notes?`,
-    minutes: `${problem.title} has a ${problem.targetMinutes}-minute target. Include thinking, coding, and testing time.`,
     bruteForceApproach: `${problem.title}: ${context.bruteForce}. Then state when that baseline finds the answer.`,
     bruteForceTime: problem.id === 242
       ? "Literal repeated matching is O(n²). Your sorting baseline is O(n log n), not O(log n), because sorting n characters dominates the final comparison."
@@ -570,8 +567,6 @@ function getJournalHints(problem: InterviewProblem) {
     optimalTime: `For this ${problem.pattern} solution, justify time using ${context.operation}; do not give Big-O without the reason.`,
     optimalSpace: `Name every growing structure used for ${context.state}, then give the largest auxiliary-space term.`,
     edgeCases: `For ${problem.title}, test ${context.tests}. Include concrete input and expected output for each.`,
-    mistakes: `A likely ${problem.title} failure is ${context.failure}. Record whether that happened and the rule that prevents it.`,
-    code: `In Python 3, ${context.code}. Make the implementation match the invariant ${cue}`,
   };
 }
 
@@ -1651,17 +1646,17 @@ export default function JobHub() {
             <div className="modal-header"><div><p className="eyebrow">Day {selectedProblem.day} · Week {selectedProblem.week}</p><h2 id="journal-title">{selectedProblem.title}</h2><p>{selectedProblem.pattern} · {selectedProblem.targetMinutes} minute target</p></div><button className="close-button" onClick={() => setSelectedProblem(null)} aria-label="Close">×</button></div>
             <div className="journal-callout"><strong>Recognition cue</strong><span>{selectedProblem.cue}</span><a href={selectedProblem.url} target="_blank" rel="noreferrer">Open LeetCode ↗</a></div>
             <div className="journal-status-row">
-              <JournalField id="journal-status" label="Status" hint={journalHints.status}><select id="journal-status" aria-describedby="journal-status-hint" value={problemDraft.status} onChange={(event) => setProblemDraft({ ...problemDraft, status: event.target.value as PrepStatus, codeReview: null })}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select></JournalField>
-              <JournalField id="journal-confidence" label="Confidence" hint={journalHints.confidence}><select id="journal-confidence" aria-describedby="journal-confidence-hint" value={problemDraft.confidence} onChange={(event) => setProblemDraft({ ...problemDraft, confidence: Number(event.target.value), codeReview: null })}><option value="0">Not rated</option><option value="1">1 — Cannot reproduce</option><option value="2">2 — Need notes</option><option value="3">3 — Mostly clear</option><option value="4">4 — Can re-code</option><option value="5">5 — Can explain cold</option></select></JournalField>
-              <JournalField id="journal-time-minutes" label="Time logged" hint={journalHints.minutes}>
+              <JournalField id="journal-status" label="Status"><select id="journal-status" value={problemDraft.status} onChange={(event) => setProblemDraft({ ...problemDraft, status: event.target.value as PrepStatus, codeReview: null })}><option>Not Started</option><option>Attempted</option><option>Solved with Hint</option><option>Solved Independently</option></select></JournalField>
+              <JournalField id="journal-confidence" label="Confidence"><select id="journal-confidence" value={problemDraft.confidence} onChange={(event) => setProblemDraft({ ...problemDraft, confidence: Number(event.target.value), codeReview: null })}><option value="0">Not rated</option><option value="1">1 — Cannot reproduce</option><option value="2">2 — Need notes</option><option value="3">3 — Mostly clear</option><option value="4">4 — Can re-code</option><option value="5">5 — Can explain cold</option></select></JournalField>
+              <JournalField id="journal-time-minutes" label="Time logged">
                 <div className="duration-input-group">
                   <div className="duration-input">
-                    <input id="journal-time-minutes" aria-label="Time logged minutes" aria-describedby="journal-time-minutes-hint journal-time-preview" type="number" min="0" step="1" inputMode="numeric" value={Math.floor((problemDraft.totalSeconds || problemDraft.minutes * 60) / 60)} onChange={(event) => updateLoggedTime(Number(event.target.value), (problemDraft.totalSeconds || problemDraft.minutes * 60) % 60)} />
+                    <input id="journal-time-minutes" aria-label="Time logged minutes" aria-describedby="journal-time-preview" type="number" min="0" step="1" inputMode="numeric" value={Math.floor((problemDraft.totalSeconds || problemDraft.minutes * 60) / 60)} onChange={(event) => updateLoggedTime(Number(event.target.value), (problemDraft.totalSeconds || problemDraft.minutes * 60) % 60)} />
                     <span>min</span>
                   </div>
                   <b aria-hidden="true">:</b>
                   <div className="duration-input">
-                    <input aria-label="Time logged seconds" aria-describedby="journal-time-minutes-hint journal-time-preview" type="number" min="0" max="59" step="1" inputMode="numeric" value={(problemDraft.totalSeconds || problemDraft.minutes * 60) % 60} onChange={(event) => updateLoggedTime(Math.floor((problemDraft.totalSeconds || problemDraft.minutes * 60) / 60), Number(event.target.value))} />
+                    <input aria-label="Time logged seconds" aria-describedby="journal-time-preview" type="number" min="0" max="59" step="1" inputMode="numeric" value={(problemDraft.totalSeconds || problemDraft.minutes * 60) % 60} onChange={(event) => updateLoggedTime(Math.floor((problemDraft.totalSeconds || problemDraft.minutes * 60) / 60), Number(event.target.value))} />
                     <span>sec</span>
                   </div>
                   <small id="journal-time-preview">{formatTimer(problemDraft.totalSeconds || problemDraft.minutes * 60)} total</small>
@@ -1686,7 +1681,7 @@ export default function JobHub() {
               <JournalField id="optimal-time" label="Optimal time complexity" hint={journalHints.optimalTime} penalizeHint onHintShown={() => recordHintUse("optimal-time")}><textarea id="optimal-time" aria-describedby="optimal-time-hint" rows={2} value={problemDraft.optimalTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n), because each item…" /></JournalField>
               <JournalField id="optimal-space" label="Optimal space complexity" hint={journalHints.optimalSpace} penalizeHint onHintShown={() => recordHintUse("optimal-space")}><textarea id="optimal-space" aria-describedby="optimal-space-hint" rows={2} value={problemDraft.optimalSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalSpaceComplexity: event.target.value, codeReview: null })} placeholder="State auxiliary space and explain it." /></JournalField>
               <JournalField id="edge-cases" label="Edge cases & tests" hint={journalHints.edgeCases} penalizeHint onHintShown={() => recordHintUse("edge-cases")}><textarea id="edge-cases" aria-describedby="edge-cases-hint" rows={3} value={problemDraft.edgeCases} onChange={(event) => setProblemDraft({ ...problemDraft, edgeCases: event.target.value, codeReview: null })} placeholder="Empty, duplicates, boundaries…" /></JournalField>
-              <JournalField id="mistakes" label="Mistakes / bug cause" hint={journalHints.mistakes} penalizeHint onHintShown={() => recordHintUse("mistakes")}><textarea id="mistakes" aria-describedby="mistakes-hint" rows={3} value={problemDraft.mistakes} onChange={(event) => setProblemDraft({ ...problemDraft, mistakes: event.target.value, codeReview: null })} placeholder="What went wrong and why?" /></JournalField>
+              <JournalField id="mistakes" label="Mistakes / bug cause"><textarea id="mistakes" rows={3} value={problemDraft.mistakes} onChange={(event) => setProblemDraft({ ...problemDraft, mistakes: event.target.value, codeReview: null })} placeholder="What went wrong and why?" /></JournalField>
             </div>
             <section className="code-review-lab" aria-labelledby="code-review-heading">
               <div className="code-review-heading">
@@ -1709,7 +1704,7 @@ export default function JobHub() {
                 <span>Your code and journal answers are sent to OpenAI only when you request a review.</span>
                 <button className="review-button" disabled={reviewRunning || !hasReviewableInput(problemDraft)} onClick={() => void evaluateCode()}>{reviewRunning ? "Scoring your work…" : problemDraft.codeReview ? "Score again" : "Score all my work"}</button>
               </div>
-              <JournalField id="solution-code" className="code-input-label" label={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution`} hint={journalHints.code} penalizeHint onHintShown={() => recordHintUse("solution-code")}><textarea id="solution-code" aria-describedby="solution-code-hint" className="code-input" rows={14} spellCheck={false} value={problemDraft.code} onChange={(event) => setProblemDraft({ ...problemDraft, code: event.target.value, codeReview: null })} placeholder={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution here…`} /></JournalField>
+              <JournalField id="solution-code" className="code-input-label" label={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution`}><textarea id="solution-code" className="code-input" rows={14} spellCheck={false} value={problemDraft.code} onChange={(event) => setProblemDraft({ ...problemDraft, code: event.target.value, codeReview: null })} placeholder={`Paste your ${problemDraft.codeLanguage || settings.primaryLanguage} solution here…`} /></JournalField>
               {reviewRunning && <div className="review-loading" role="status"><span /><div><strong>Checking your code and reasoning…</strong><small>This usually takes under a minute.</small></div></div>}
               {reviewError && <div className="review-error" role="alert"><strong>Review could not run</strong><span>{reviewError}</span><small>Your journal stays saved in this browser. If the connection message repeats, confirm Job Hub is still running locally and refresh.</small></div>}
               {problemDraft.codeReview && (
