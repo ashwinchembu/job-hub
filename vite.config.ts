@@ -2,6 +2,7 @@ import vinext from "vinext";
 import { defineConfig, loadEnv } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { localCodeReview } from "./build/local-code-review";
+import { localAiHint } from "./build/ai-hint";
 import { localJournalBackup } from "./build/local-journal-backup";
 import { localJobTracker } from "./build/local-job-tracker";
 import { sites } from "./build/sites-vite-plugin";
@@ -60,6 +61,7 @@ export default defineConfig(async ({ mode }) => {
       : undefined,
     plugins: [
       localJobTracker(),
+      localAiHint(),
       localCodeReview(),
       localJournalBackup(),
       vinext(),

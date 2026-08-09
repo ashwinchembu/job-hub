@@ -2,10 +2,14 @@
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 import seedApplications from "../app/seed-applications.json";
+import { createAiHint } from "../build/ai-hint";
+import { codeReviewErrorMessage, createCodeReview } from "../build/local-code-review";
 
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
+  OPENAI_API_KEY?: string;
+  OPENAI_MODEL?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -29,6 +33,28 @@ interface ExecutionContext {
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/hint" || url.pathname === "/api/code-review") {
+      const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
+      if (request.method !== "POST") {
+        return new Response(JSON.stringify({ error: "Method not allowed." }), { status: 405, headers });
+      }
+      if (!env.OPENAI_API_KEY) {
+        return new Response(JSON.stringify({ error: "AI features are not configured yet." }), { status: 503, headers });
+      }
+      try {
+        const input = await request.json();
+        if (url.pathname === "/api/hint") {
+          return new Response(JSON.stringify(await createAiHint(input, env.OPENAI_API_KEY, env.OPENAI_MODEL)), { headers });
+        }
+        return new Response(JSON.stringify({ review: await createCodeReview(input, env.OPENAI_API_KEY, env.OPENAI_MODEL) }), { headers });
+      } catch (error) {
+        const message = url.pathname === "/api/code-review"
+          ? codeReviewErrorMessage(error)
+          : error instanceof Error ? error.message : "The AI hint could not be generated.";
+        return new Response(JSON.stringify({ error: message }), { status: 500, headers });
+      }
+    }
 
     if (url.pathname === "/api/state") {
       const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };

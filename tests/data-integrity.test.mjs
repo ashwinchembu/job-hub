@@ -5,6 +5,7 @@ import test from "node:test";
 const dataSource = await readFile(new URL("../app/data.ts", import.meta.url), "utf8");
 const hubSource = await readFile(new URL("../app/JobHub.tsx", import.meta.url), "utf8");
 const codeReviewSource = await readFile(new URL("../build/local-code-review.ts", import.meta.url), "utf8");
+const aiHintSource = await readFile(new URL("../build/ai-hint.ts", import.meta.url), "utf8");
 const localBackupSource = await readFile(new URL("../build/local-journal-backup.ts", import.meta.url), "utf8");
 const workerSource = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
 const hostingConfig = JSON.parse(await readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"));
@@ -33,9 +34,13 @@ test("hint independence and final submission remain separate scores", () => {
   assert.match(hubSource, /hintsUsed: string\[\]/);
 });
 
-test("hints only appear on fields where solution guidance is useful", () => {
-  assert.match(hubSource, /hint\?: string/);
-  assert.match(hubSource, /\{hint && <button/);
+test("reasoning fields generate live problem-specific AI hints", () => {
+  assert.match(hubSource, /generateHint\?: \(\) => Promise<string>/);
+  assert.match(hubSource, /fetch\("\/api\/hint"/);
+  assert.match(hubSource, /Generate AI hint/);
+  assert.match(workerSource, /url\.pathname === "\/api\/hint"/);
+  assert.match(aiHintSource, /currentAnswer/);
+  assert.match(aiHintSource, /without giving complete code, a full solution, or the final answer/);
   assert.match(hubSource, /<JournalField id="journal-status" label="Status">/);
   assert.match(hubSource, /<JournalField id="journal-confidence" label="Confidence">/);
   assert.match(hubSource, /<JournalField id="journal-time-minutes" label="Time logged">/);
@@ -100,10 +105,8 @@ test("journal saves and AI reviews update the private local Excel workbook", () 
   assert.match(localBackupSource, /rowsByKey\.set/);
 });
 
-test("the invariant hint teaches the proof obligation explicitly", () => {
-  assert.match(hubSource, /Before each step/);
-  assert.match(hubSource, /safely make this decision because/);
-  assert.match(hubSource, /proves you never discard a valid answer/);
+test("the live invariant hint asks for a preserved truth", () => {
+  assert.match(aiHintSource, /what remains true before and after each iteration/);
 });
 
 test("the review language picker uses the polished accessible control", () => {
@@ -119,8 +122,9 @@ test("progressive hints appear before the grading details", () => {
   assert.ok(resultIndex >= 0 && hintsIndex > resultIndex && scoreIndex > hintsIndex);
 });
 
-test("Valid Anagram hints distinguish literal brute force from the sorting baseline", () => {
-  assert.match(hubSource, /literal brute force scans for one unused matching character/);
-  assert.match(hubSource, /sorting baseline is O\(n log n\), not O\(log n\)/);
-  assert.match(hubSource, /sorted\(s\) and sorted\(t\) create new lists/);
+test("AI endpoints use the hosted OpenAI secret and configured model", () => {
+  assert.match(workerSource, /env\.OPENAI_API_KEY/);
+  assert.match(workerSource, /env\.OPENAI_MODEL/);
+  assert.match(workerSource, /createCodeReview/);
+  assert.match(workerSource, /createAiHint/);
 });

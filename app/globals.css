@@ -1966,6 +1966,13 @@ textarea:focus-visible {
   line-height: 1.55;
 }
 
+.journal-hint-error {
+  margin: 0 0 10px;
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .journal-hint b {
   margin-right: 4px;
   color: var(--green);

@@ -380,7 +380,7 @@ function buildDailyCoaching(progress: Record<string, ProblemProgress>) {
 function JournalField({
   id,
   label,
-  hint,
+  generateHint,
   className = "",
   penalizeHint = false,
   onHintShown,
@@ -388,25 +388,48 @@ function JournalField({
 }: {
   id: string;
   label: string;
-  hint?: string;
+  generateHint?: () => Promise<string>;
   className?: string;
   penalizeHint?: boolean;
   onHintShown?: () => void;
   children: ReactNode;
 }) {
   const [showHint, setShowHint] = useState(false);
+  const [generatedHint, setGeneratedHint] = useState("");
+  const [hintError, setHintError] = useState("");
+  const [hintLoading, setHintLoading] = useState(false);
   const hintId = `${id}-hint`;
-  const toggleHint = () => {
-    if (!showHint && penalizeHint) onHintShown?.();
-    setShowHint((open) => !open);
+  const toggleHint = async () => {
+    if (showHint) {
+      setShowHint(false);
+      return;
+    }
+    if (generatedHint) {
+      setShowHint(true);
+      return;
+    }
+    if (!generateHint || hintLoading) return;
+    setHintLoading(true);
+    setHintError("");
+    try {
+      const nextHint = await generateHint();
+      setGeneratedHint(nextHint);
+      setShowHint(true);
+      if (penalizeHint) onHintShown?.();
+    } catch (error) {
+      setHintError(error instanceof Error ? error.message : "The AI hint could not be generated.");
+    } finally {
+      setHintLoading(false);
+    }
   };
   return (
     <div className={`journal-field ${className}`}>
       <div className="journal-field-heading">
         <label htmlFor={id}>{label}</label>
-        {hint && <button type="button" className="journal-hint-button" aria-expanded={showHint} aria-controls={hintId} onClick={toggleHint}>{showHint ? "Hide hint" : `Show hint${penalizeHint ? ` · −${HINT_PENALTY}` : ""}`}</button>}
+        {generateHint && <button type="button" className="journal-hint-button" disabled={hintLoading} aria-expanded={showHint} aria-controls={hintId} onClick={() => void toggleHint()}>{hintLoading ? "Generating…" : showHint ? "Hide AI hint" : `Generate AI hint${penalizeHint ? ` · −${HINT_PENALTY}` : ""}`}</button>}
       </div>
-      {hint && showHint && <p className="journal-hint" id={hintId}><b>Hint</b>{hint}</p>}
+      {showHint && generatedHint && <p className="journal-hint" id={hintId}><b>AI hint</b>{generatedHint}</p>}
+      {hintError && <p className="journal-hint-error" role="alert">{hintError}</p>}
       {children}
     </div>
   );
@@ -1055,6 +1078,27 @@ export default function JobHub() {
     });
   }
 
+  async function generateJournalHint(fieldId: string, fieldLabel: string, currentAnswer: string) {
+    if (!selectedProblem) throw new Error("Open a problem before requesting a hint.");
+    const response = await fetch("/api/hint", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: selectedProblem.title,
+        problemUrl: selectedProblem.url,
+        pattern: selectedProblem.pattern,
+        cue: selectedProblem.cue,
+        fieldId,
+        fieldLabel,
+        currentAnswer,
+        language: problemDraft.codeLanguage || settings.primaryLanguage,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.hint) throw new Error(payload.error || "The AI hint could not be generated.");
+    return payload.hint as string;
+  }
+
   function saveProblemJournal() {
     if (!selectedProblem) return;
     const markedAttempted = problemDraft.status === "Not Started";
@@ -1583,7 +1627,6 @@ export default function JobHub() {
   }
 
   if (!ready) return <div className="app-loading">Opening Job Hub…</div>;
-  const journalHints = getJournalHints(selectedProblem ?? todayProblem);
   const currentIndependenceScore = independenceScore(problemDraft);
 
   return (
@@ -1673,14 +1716,14 @@ export default function JobHub() {
               )}
             </div>
             <div className="journal-grid">
-              <JournalField id="brute-force-approach" className="journal-wide" label="My brute-force approach" hint={journalHints.bruteForceApproach} penalizeHint onHintShown={() => recordHintUse("brute-force-approach")}><textarea id="brute-force-approach" aria-describedby="brute-force-approach-hint" rows={4} value={problemDraft.naiveApproach} onChange={(event) => setProblemDraft({ ...problemDraft, naiveApproach: event.target.value, codeReview: null })} placeholder="What would the brute-force solution do, step by step?" /></JournalField>
-              <JournalField id="brute-force-time" label="Brute-force time complexity" hint={journalHints.bruteForceTime} penalizeHint onHintShown={() => recordHintUse("brute-force-time")}><textarea id="brute-force-time" aria-describedby="brute-force-time-hint" rows={2} value={problemDraft.bruteForceTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n²), because…" /></JournalField>
-              <JournalField id="brute-force-space" label="Brute-force space complexity" hint={journalHints.bruteForceSpace} penalizeHint onHintShown={() => recordHintUse("brute-force-space")}><textarea id="brute-force-space" aria-describedby="brute-force-space-hint" rows={2} value={problemDraft.bruteForceSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceSpaceComplexity: event.target.value, codeReview: null })} placeholder="Example: O(1) auxiliary space, because…" /></JournalField>
-              <JournalField id="journal-invariant" className="journal-wide" label="Key invariant / decision rule" hint={journalHints.invariant} penalizeHint onHintShown={() => recordHintUse("journal-invariant")}><textarea id="journal-invariant" aria-describedby="journal-invariant-hint" rows={4} value={problemDraft.invariant} onChange={(event) => setProblemDraft({ ...problemDraft, invariant: event.target.value, codeReview: null })} placeholder="What stays true after every step, and why is each choice safe?" /></JournalField>
-              <JournalField id="optimal-steps" className="journal-wide" label="Optimal algorithm steps" hint={journalHints.optimalSteps} penalizeHint onHintShown={() => recordHintUse("optimal-steps")}><textarea id="optimal-steps" aria-describedby="optimal-steps-hint" rows={5} value={problemDraft.solutionSteps} onChange={(event) => setProblemDraft({ ...problemDraft, solutionSteps: event.target.value, codeReview: null })} placeholder="Write the optimized algorithm step by step in plain English." /></JournalField>
-              <JournalField id="optimal-time" label="Optimal time complexity" hint={journalHints.optimalTime} penalizeHint onHintShown={() => recordHintUse("optimal-time")}><textarea id="optimal-time" aria-describedby="optimal-time-hint" rows={2} value={problemDraft.optimalTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n), because each item…" /></JournalField>
-              <JournalField id="optimal-space" label="Optimal space complexity" hint={journalHints.optimalSpace} penalizeHint onHintShown={() => recordHintUse("optimal-space")}><textarea id="optimal-space" aria-describedby="optimal-space-hint" rows={2} value={problemDraft.optimalSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalSpaceComplexity: event.target.value, codeReview: null })} placeholder="State auxiliary space and explain it." /></JournalField>
-              <JournalField id="edge-cases" label="Edge cases & tests" hint={journalHints.edgeCases} penalizeHint onHintShown={() => recordHintUse("edge-cases")}><textarea id="edge-cases" aria-describedby="edge-cases-hint" rows={3} value={problemDraft.edgeCases} onChange={(event) => setProblemDraft({ ...problemDraft, edgeCases: event.target.value, codeReview: null })} placeholder="Empty, duplicates, boundaries…" /></JournalField>
+              <JournalField id="brute-force-approach" className="journal-wide" label="My brute-force approach" generateHint={() => generateJournalHint("brute-force-approach", "My brute-force approach", problemDraft.naiveApproach)} penalizeHint onHintShown={() => recordHintUse("brute-force-approach")}><textarea id="brute-force-approach" aria-describedby="brute-force-approach-hint" rows={4} value={problemDraft.naiveApproach} onChange={(event) => setProblemDraft({ ...problemDraft, naiveApproach: event.target.value, codeReview: null })} placeholder="What would the brute-force solution do, step by step?" /></JournalField>
+              <JournalField id="brute-force-time" label="Brute-force time complexity" generateHint={() => generateJournalHint("brute-force-time", "Brute-force time complexity", problemDraft.bruteForceTimeComplexity)} penalizeHint onHintShown={() => recordHintUse("brute-force-time")}><textarea id="brute-force-time" aria-describedby="brute-force-time-hint" rows={2} value={problemDraft.bruteForceTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n²), because…" /></JournalField>
+              <JournalField id="brute-force-space" label="Brute-force space complexity" generateHint={() => generateJournalHint("brute-force-space", "Brute-force space complexity", problemDraft.bruteForceSpaceComplexity)} penalizeHint onHintShown={() => recordHintUse("brute-force-space")}><textarea id="brute-force-space" aria-describedby="brute-force-space-hint" rows={2} value={problemDraft.bruteForceSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, bruteForceSpaceComplexity: event.target.value, codeReview: null })} placeholder="Example: O(1) auxiliary space, because…" /></JournalField>
+              <JournalField id="journal-invariant" className="journal-wide" label="Key invariant / decision rule" generateHint={() => generateJournalHint("journal-invariant", "Key invariant / decision rule", problemDraft.invariant)} penalizeHint onHintShown={() => recordHintUse("journal-invariant")}><textarea id="journal-invariant" aria-describedby="journal-invariant-hint" rows={4} value={problemDraft.invariant} onChange={(event) => setProblemDraft({ ...problemDraft, invariant: event.target.value, codeReview: null })} placeholder="What stays true after every step, and why is each choice safe?" /></JournalField>
+              <JournalField id="optimal-steps" className="journal-wide" label="Optimal algorithm steps" generateHint={() => generateJournalHint("optimal-steps", "Optimal algorithm steps", problemDraft.solutionSteps)} penalizeHint onHintShown={() => recordHintUse("optimal-steps")}><textarea id="optimal-steps" aria-describedby="optimal-steps-hint" rows={5} value={problemDraft.solutionSteps} onChange={(event) => setProblemDraft({ ...problemDraft, solutionSteps: event.target.value, codeReview: null })} placeholder="Write the optimized algorithm step by step in plain English." /></JournalField>
+              <JournalField id="optimal-time" label="Optimal time complexity" generateHint={() => generateJournalHint("optimal-time", "Optimal time complexity", problemDraft.optimalTimeComplexity)} penalizeHint onHintShown={() => recordHintUse("optimal-time")}><textarea id="optimal-time" aria-describedby="optimal-time-hint" rows={2} value={problemDraft.optimalTimeComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalTimeComplexity: event.target.value, codeReview: null })} placeholder="Example: O(n), because each item…" /></JournalField>
+              <JournalField id="optimal-space" label="Optimal space complexity" generateHint={() => generateJournalHint("optimal-space", "Optimal space complexity", problemDraft.optimalSpaceComplexity)} penalizeHint onHintShown={() => recordHintUse("optimal-space")}><textarea id="optimal-space" aria-describedby="optimal-space-hint" rows={2} value={problemDraft.optimalSpaceComplexity} onChange={(event) => setProblemDraft({ ...problemDraft, optimalSpaceComplexity: event.target.value, codeReview: null })} placeholder="State auxiliary space and explain it." /></JournalField>
+              <JournalField id="edge-cases" label="Edge cases & tests" generateHint={() => generateJournalHint("edge-cases", "Edge cases & tests", problemDraft.edgeCases)} penalizeHint onHintShown={() => recordHintUse("edge-cases")}><textarea id="edge-cases" aria-describedby="edge-cases-hint" rows={3} value={problemDraft.edgeCases} onChange={(event) => setProblemDraft({ ...problemDraft, edgeCases: event.target.value, codeReview: null })} placeholder="Empty, duplicates, boundaries…" /></JournalField>
               <JournalField id="mistakes" label="Mistakes / bug cause"><textarea id="mistakes" rows={3} value={problemDraft.mistakes} onChange={(event) => setProblemDraft({ ...problemDraft, mistakes: event.target.value, codeReview: null })} placeholder="What went wrong and why?" /></JournalField>
             </div>
             <section className="code-review-lab" aria-labelledby="code-review-heading">
