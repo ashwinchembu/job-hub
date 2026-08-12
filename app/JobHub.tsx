@@ -3,7 +3,7 @@
 import { ChangeEvent, FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { BLIND_75_TOTAL, blind75CoverageCount, interviewPlan, InterviewProblem, weekThemes } from "./data";
 
-type View = "overview" | "matches" | "applications" | "prep" | "data";
+type View = "overview" | "matches" | "career" | "applications" | "prep" | "data";
 type ApplicationStatus =
   | "Saved"
   | "Preparing"
@@ -1606,6 +1606,77 @@ export default function JobHub() {
     );
   }
 
+  function renderCareerLab() {
+    const outreachRoles = applications
+      .filter((application) => !["Rejected", "Closed"].includes(application.status))
+      .sort((a, b) => (a.priority === "High" ? -1 : b.priority === "High" ? 1 : 0))
+      .slice(0, 6);
+
+    const hiringManagerSearch = (application: Application) =>
+      `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${application.company} hiring manager engineering ${application.role}`)}`;
+    const outreachMessage = (application: Application) =>
+      `Hi — I’m interested in the ${application.role} role at ${application.company}. I’m a Bay Area full-stack and applied-AI engineer working across React, TypeScript, Python, FastAPI, APIs, and RAG systems. My recent work includes enterprise healthcare technology workflows plus end-to-end AI products. I’d appreciate the chance to learn what the team values most in this hire. Portfolio: https://ashchembu.com`;
+    const copyOutreach = async (application: Application) => {
+      await navigator.clipboard.writeText(outreachMessage(application));
+      showToast("Outreach copied · review it before sending");
+    };
+
+    return (
+      <>
+        <section className="career-hero">
+          <div><p className="eyebrow">Career lab</p><h1>From match to conversation.</h1><p>Turn each application into a focused outreach, interview story, salary target, and negotiation plan. Nothing is sent without your review.</p></div>
+          <div className="career-steps"><span>01 Match</span><span>02 Reach out</span><span>03 Practice</span><span>04 Negotiate</span></div>
+        </section>
+
+        <section className="career-grid">
+          <article className="career-panel outreach-panel">
+            <div className="career-panel-heading"><div><p className="eyebrow">Hiring manager outreach</p><h2>Find the right person.</h2></div><span className="approval-badge">Review before send</span></div>
+            <p className="panel-intro">Search LinkedIn for the engineering leader or hiring manager, then use a concise role-specific introduction. Job Hub never bulk-messages or guesses a recipient.</p>
+            <div className="outreach-list">
+              {outreachRoles.map((application) => (
+                <div className="outreach-row" key={application.id}>
+                  <div><strong>{application.company}</strong><span>{application.role}</span><small>{application.location}</small></div>
+                  <div className="outreach-actions">
+                    <button className="secondary-button" onClick={() => void copyOutreach(application)}>Copy message</button>
+                    <a className="primary-button" href={hiringManagerSearch(application)} target="_blank" rel="noreferrer">Find on LinkedIn ↗</a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="career-panel mock-panel">
+            <p className="eyebrow">Mock interview</p><h2>Tighten the story.</h2>
+            <p className="mock-question">Tell me about a system you designed where automation had to stop for human approval.</p>
+            <div className="coach-score"><strong>76%</strong><span>Answer confidence</span></div>
+            <ul><li>Lead with the application-specific approval boundary.</li><li>Explain JSONL request, decision, and action logs.</li><li>Close with duplicate prevention and authoritative confirmation.</li></ul>
+            <button className="secondary-button" onClick={() => setView("prep")}>Open interview prep →</button>
+          </article>
+
+          <article className="career-panel salary-panel">
+            <p className="eyebrow">Salary benchmark</p><h2>Know the range.</h2>
+            <div className="salary-scale"><span style={{ left: "18%" }}>P25<br/><b>$150k</b></span><span className="salary-target" style={{ left: "54%" }}>Target<br/><b>$190k</b></span><span style={{ left: "84%" }}>P90<br/><b>$250k</b></span></div>
+            <p>Based on the current Bay Area roles in your tracker with published compensation. Use the actual role range before negotiating.</p>
+          </article>
+
+          <article className="career-panel clarity-panel">
+            <p className="eyebrow">Career clarity</p><h2>Your strongest lane.</h2>
+            <strong>Product engineering at the intersection of full-stack systems and applied AI.</strong>
+            <p>Prioritize teams where React/TypeScript product work connects directly to Python APIs, RAG, integrations, and customer workflows.</p>
+            <div className="career-tags"><span>Product</span><span>Applied AI</span><span>Full stack</span><span>Forward deployed</span></div>
+          </article>
+
+          <article className="career-panel negotiation-panel">
+            <p className="eyebrow">Negotiation coach</p><h2>Prepare the counter.</h2>
+            <blockquote>“I’m excited about the role. Based on the scope, Bay Area market, and the published range, could we explore a base closer to $190,000?”</blockquote>
+            <p>Anchor to the employer’s own range and role scope. Never invent competing offers or compensation data.</p>
+            <button className="text-button" onClick={() => void navigator.clipboard.writeText("I’m excited about the role. Based on the scope, Bay Area market, and the published range, could we explore a base closer to $190,000?")}>Copy counter language</button>
+          </article>
+        </section>
+      </>
+    );
+  }
+
   function renderPrep() {
     const weekProblems = interviewPlan.filter((problem) => problem.week === prepWeek);
     const completedInWeek = weekProblems.filter((problem) => ["Solved with Hint", "Solved Independently"].includes(progress[String(problem.id)]?.status)).length;
@@ -1692,16 +1763,18 @@ export default function JobHub() {
         <nav aria-label="Main navigation">
           <button className={view === "overview" ? "active" : ""} onClick={() => setView("overview")}><span>01</span>Overview</button>
           <button className={view === "matches" ? "active" : ""} onClick={() => setView("matches")}><span>02</span>Matches</button>
-          <button className={view === "applications" ? "active" : ""} onClick={() => setView("applications")}><span>03</span>Applications</button>
-          <button className={view === "prep" ? "active" : ""} onClick={() => setView("prep")}><span>04</span>Interview prep</button>
-          <button className={view === "data" ? "active" : ""} onClick={() => setView("data")}><span>05</span>Data & backup</button>
+          <button className={view === "career" ? "active" : ""} onClick={() => setView("career")}><span>03</span>Career lab</button>
+          <button className={view === "applications" ? "active" : ""} onClick={() => setView("applications")}><span>04</span>Applications</button>
+          <button className={view === "prep" ? "active" : ""} onClick={() => setView("prep")}><span>05</span>Interview prep</button>
+          <button className={view === "data" ? "active" : ""} onClick={() => setView("data")}><span>06</span>Data & backup</button>
         </nav>
         <div className="sidebar-foot"><span className={`local-dot ${sheetSync.status === "error" ? "has-error" : ""}`} />{sheetSync.status === "connected" ? "Workbook connected" : "Local workspace"}<button onClick={exportBackup}>Export backup</button></div>
       </aside>
       <main className="main-content">
-        <header className="mobile-header"><div className="brand-mark"><span>JH</span><strong>Job Hub</strong></div><select value={view} onChange={(event) => setView(event.target.value as View)} aria-label="Choose page"><option value="overview">Overview</option><option value="matches">Matches</option><option value="applications">Applications</option><option value="prep">Interview prep</option><option value="data">Data & backup</option></select></header>
+        <header className="mobile-header"><div className="brand-mark"><span>JH</span><strong>Job Hub</strong></div><select value={view} onChange={(event) => setView(event.target.value as View)} aria-label="Choose page"><option value="overview">Overview</option><option value="matches">Matches</option><option value="career">Career lab</option><option value="applications">Applications</option><option value="prep">Interview prep</option><option value="data">Data & backup</option></select></header>
         {view === "overview" && renderOverview()}
         {view === "matches" && renderMatches()}
+        {view === "career" && renderCareerLab()}
         {view === "applications" && renderApplications()}
         {view === "prep" && renderPrep()}
         {view === "data" && renderData()}
