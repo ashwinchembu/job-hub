@@ -1,0 +1,160 @@
+{
+  "metadata": {
+    "company": "Cadence",
+    "role": "Software Engineer (All Levels)",
+    "slug": "cadence_software_engineer_all_levels_v3_test",
+    "job_description_source": "generated/resume_specs/cadence_software_engineer_all_levels/job_description.txt",
+    "primary_track": "backend/platform engineering",
+    "secondary_track": "healthcare full-stack engineering",
+    "tailoring_version": 3,
+    "facts_reviewed_at": "2026-08-11T20:00:00Z",
+    "fact_sheet_sha256": "c46baf29e131aac63540a438e2f5288c6a588cff7f042d5f87b0996c96091e92",
+    "tailoring_standard_sha256": "9767a7607658449f82bf6d18fd574c175cf27897a713d173a8a9f56eb1a60cae",
+    "required_website": "https://ashchembu.com",
+    "matched_keywords": ["Python", "APIs", "AWS", "cloud", "full-stack", "healthcare", "services", "testing"],
+    "emphasis_terms": ["327K+ healthcare records", "67K+ healthcare records", "5-layer ETL/MDM architecture", "2 input types", "3 delivery surfaces", "158 GitHub commits", "44 backend-scoped commits", "20+ Git-attributed Node/Express REST routes", "43,340 anonymized interaction rows", "2,805 session IDs", "12.2K aggregate uses", "Python NLP", "React interfaces", "5 application safeguards", "five figures", "6 core multi-tenant workflows", "3 role groups", "Testing Library", "7 Android application", "2 access paths", "2 storage drivers", "2 webhook verification controls", "4 supported operating modes", "4 full-stack meeting workflows", "5-stage retrieval-augmented generation flow", "2 knowledge sources"],
+    "selection_rationale": "Prioritizes verified healthcare services, Python APIs, AWS/cloud integration, data quality, backend reliability, testing, and stakeholder delivery without claiming Go, Postgres production ownership, patient-monitoring ownership, clinical work, or startup-scale production traffic.",
+    "body_tailoring_summary": "Keeps ZS first with five healthcare/data/service bullets, prioritizes Filedrop's secure backend interfaces, replaces generic RAG with Forge health-data services, and retains Sylk only for cloud authorization and automated testing evidence.",
+    "omitted_requirements": ["Go production experience", "PostgreSQL production ownership", "remote patient-monitoring ownership", "clinical care ownership", "high-growth startup production scale"],
+    "role_specific_bullets": [
+      "Built Snowflake SQL and Python service workflows across **327K+ healthcare records**, joining identifiers, specialties, and addresses with API connectivity and producing auditable exception reports for regulated product and stakeholder decisions.",
+      "Designed reconciliation services across **67K+ healthcare records** using NPI, DEA, HIN, 340B, licenses, addresses, and fuzzy matching, routing ambiguous entities into deterministic stewardship review instead of silently publishing uncertain matches.",
+      "Defined a **5-layer healthcare data architecture** from landing through publication, adding data-quality rules, delta processing, history tracking, and source-to-target mappings so service outputs remained maintainable, traceable, audit-ready, and understandable to technical and product stakeholders.",
+      "Implemented Python/Flask services across **3 cloud workflow components** - API endpoints, AWS S3 storage, and Smartsheet integrations - automating document handoffs while preserving requirements, UAT evidence, and implementation documentation.",
+      "Validated **2 enterprise workflow layers** - live CRM behavior and application metadata - then converted discrepancies into acceptance criteria, prioritized backlog items, test evidence, and implementation-ready artifacts for product owners, engineers, and internal stakeholders.",
+      "Exposed **4 secure backend interfaces** - REST, OpenAPI, MCP, and signed webhooks - over local and S3-compatible storage, giving browser, API, and AI clients documented upload, versioning, messaging, coordination, and durable migration paths across development and cloud environments.",
+      "Verified **2 webhook security checks** using HMAC-SHA256 signatures and timing-safe comparison, then documented local and cloud deployment paths so browser, API, and automation integrations could be tested repeatably without exposing storage credentials or weakening audit boundaries."
+    ],
+    "bullet_evidence_audit": [
+      {"bullet":"Built Snowflake SQL and Python service workflows across **327K+ healthcare records**, joining identifiers, specialties, and addresses with API connectivity and producing auditable exception reports for regulated product and stakeholder decisions.","problem":"Healthcare data delivery","mechanism":"Snowflake SQL, Python, APIs","implementation":"Joins and exception reporting","outcome":"327K+ auditable records"},
+      {"bullet":"Designed reconciliation services across **67K+ healthcare records** using NPI, DEA, HIN, 340B, licenses, addresses, and fuzzy matching, routing ambiguous entities into deterministic stewardship review instead of silently publishing uncertain matches.","problem":"Entity ambiguity","mechanism":"Identifier and fuzzy matching","implementation":"Stewardship routing","outcome":"67K+ reviewed records"},
+      {"bullet":"Defined a **5-layer healthcare data architecture** from landing through publication, adding data-quality rules, delta processing, history tracking, and source-to-target mappings so service outputs remained maintainable, traceable, audit-ready, and understandable to technical and product stakeholders.","problem":"Maintainable healthcare data","mechanism":"Layered ETL/MDM","implementation":"Five layers and QC","outcome":"Audit-ready outputs"},
+      {"bullet":"Implemented Python/Flask services across **3 cloud workflow components** - API endpoints, AWS S3 storage, and Smartsheet integrations - automating document handoffs while preserving requirements, UAT evidence, and implementation documentation.","problem":"Manual document handoffs","mechanism":"Python, Flask, AWS S3, Smartsheet","implementation":"Three components","outcome":"Automated documented handoffs"},
+      {"bullet":"Validated **2 enterprise workflow layers** - live CRM behavior and application metadata - then converted discrepancies into acceptance criteria, prioritized backlog items, test evidence, and implementation-ready artifacts for product owners, engineers, and internal stakeholders.","problem":"Workflow discrepancies","mechanism":"CRM and metadata validation","implementation":"Two layers","outcome":"Implementation-ready backlog"},
+      {"bullet":"Exposed **4 secure backend interfaces** - REST, OpenAPI, MCP, and signed webhooks - over local and S3-compatible storage, giving browser, API, and AI clients documented upload, versioning, messaging, coordination, and durable migration paths across development and cloud environments.","problem":"Secure client integrations","mechanism":"REST, OpenAPI, MCP, webhooks","implementation":"Four interfaces","outcome":"Documented client paths"},
+      {"bullet":"Verified **2 webhook security checks** using HMAC-SHA256 signatures and timing-safe comparison, then documented local and cloud deployment paths so browser, API, and automation integrations could be tested repeatably without exposing storage credentials or weakening audit boundaries.","problem":"Webhook trust","mechanism":"HMAC and timing-safe checks","implementation":"Two checks","outcome":"Testable secure integration"}
+    ]
+  },
+  "contact": {
+    "name": "Ashwin Chembu",
+    "phone": "(341)-356-1722",
+    "email": "ashchembu@gmail.com",
+    "location": "Fremont, CA | https://ashchembu.com | SF Hybrid / Onsite"
+  },
+  "profile": "Backend and full-stack engineer with 2+ years of full-time experience building Python services, AWS integrations, healthcare data workflows, reliable APIs, and tested cloud products.",
+  "skills": [
+    {"label": "Languages & Services", "items": "Python, TypeScript, JavaScript, SQL, FastAPI, Node.js, Express, REST APIs"},
+    {"label": "Cloud & Data", "items": "AWS S3, Snowflake, MongoDB, MySQL, Redis, document ingestion, data-quality workflows"},
+    {"label": "Full Stack & Quality", "items": "React, pytest, Vitest, Testing Library, Playwright, UAT, workflow validation"}
+  ],
+  "experience": [
+    {
+      "title": "Business Technology Solutions Associate | ZS Associates",
+      "strength": "strong",
+      "target_matches": ["Python", "APIs", "AWS", "healthcare", "services"],
+      "selection_reason": "Direct professional match for healthcare services, cloud integration, data quality, APIs, and regulated stakeholder delivery.",
+      "entry_priority": 1,
+      "date": "South San Francisco, CA | Jun 2024-Present",
+      "summary": "Healthcare AI, data, API integration, and workflow delivery",
+      "tech": "Python | FastAPI | React | Snowflake | AWS | pytest",
+      "bullets": [
+        "Built Snowflake SQL and Python service workflows across **327K+ healthcare records**, joining identifiers, specialties, and addresses with API connectivity and producing auditable exception reports for regulated product and stakeholder decisions.",
+        "Designed reconciliation services across **67K+ healthcare records** using NPI, DEA, HIN, 340B, licenses, addresses, and fuzzy matching, routing ambiguous entities into deterministic stewardship review instead of silently publishing uncertain matches.",
+        "Defined a **5-layer healthcare data architecture** from landing through publication, adding data-quality rules, delta processing, history tracking, and source-to-target mappings so service outputs remained maintainable, traceable, audit-ready, and understandable to technical and product stakeholders.",
+        "Implemented Python/Flask services across **3 cloud workflow components** - API endpoints, AWS S3 storage, and Smartsheet integrations - automating document handoffs while preserving requirements, UAT evidence, and implementation documentation.",
+        "Validated **2 enterprise workflow layers** - live CRM behavior and application metadata - then converted discrepancies into acceptance criteria, prioritized backlog items, test evidence, and implementation-ready artifacts for product owners, engineers, and internal stakeholders."
+      ]
+    },
+    {
+      "title": "Data Analyst / Web Development Lead | Tech4Good @ UCSC",
+      "strength": "moderate",
+      "target_matches": ["services", "full-stack", "testing"],
+      "selection_reason": "Supports service implementation, database-backed live workflows, analytics, and collaborative engineering evidence.",
+      "entry_priority": 2,
+      "date": "Mar 2023-Present",
+      "summary": "Collaborative research and classroom workflow tooling",
+      "tech": "TypeScript | Node.js | Express | MongoDB | Python | Figma APIs",
+      "bullets": [
+        "Contributed **158 GitHub commits**, including **44 backend-scoped commits** across TypeScript and Figma API chat, polling, Likert, text-entry, and export workflows in a collaborator-owned research toolkit, preserving accurate team ownership, public attribution, and research delivery evidence.",
+        "Implemented **20+ Git-attributed Node/Express REST routes** backed by three MongoDB databases, populated message logs, change streams, and persisted poll and voter records, reliably synchronizing threads, edits, anonymous responses, votes, grouped responses, reveal operations, and live updates.",
+        "Analyzed **43,340 anonymized interaction rows** across **2,805 session IDs** with Python and Pandas notebooks, while six team-published Figma Community resources reached approximately **12.2K aggregate uses** with team-library attribution preserved for reproducible analytics and public research reporting."
+      ]
+    },
+    {
+      "title": "Founder and Lead Developer | Tallyrus",
+      "strength": "supporting",
+      "target_matches": ["Python", "AWS", "full-stack", "services"],
+      "selection_reason": "Adds founder-owned Python, document-service, security, user-testing, and iterative delivery evidence.",
+      "entry_priority": 3,
+      "date": "Jun 2023-Present",
+      "summary": "Full-stack retrieval tooling for educator feedback",
+      "tech": "Python | React | TypeScript | Flask | MongoDB | LangChain",
+      "bullets": [
+        "Built a retrieval-augmented grading workflow across **4 stages** - document ingestion, Pinecone vector search, rubric scoring, and educator feedback - connecting Python NLP services to React interfaces that preserved consistent scoring logic, actionable review loops, and grading decisions for educators.",
+        "Implemented **5 application safeguards** across the React/TypeScript and Express product, including Google OAuth, protected routes, secure sessions, rate limiting, and Helmet security headers, while MongoDB and S3 managed application and document data for retrieval-based grading workflows.",
+        "Maintained **3 backend data paths** - MongoDB application state, S3 document storage, and Pinecone retrieval - through Python and Flask services, keeping ingestion, rubric scoring, and educator feedback synchronized across tested document workflows."
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "title": "Sylk | Multi-Tenant Supply-Chain Platform",
+      "strength": "supporting",
+      "target_matches": ["full-stack", "cloud", "testing"],
+      "selection_reason": "Demonstrates cloud-backed authorization, cross-tenant reliability, and comprehensive automated testing.",
+      "entry_priority": 3,
+      "date": "2025-Present",
+      "summary": "Role-aware web and Android product with tested tenant isolation",
+      "tech": "React 19 | TypeScript | Firebase | Capacitor 7 | Playwright",
+      "bullets": [
+        "Built **6 core multi-tenant workflows** covering organization onboarding, shipments, fulfillment, tracking, file collaboration, and real-time chat, separating retailer-only financial data from shared manufacturing views while supporting retailer administrators, factory viewers, and staff across mobile interfaces.",
+        "Enforced permissions for **3 role groups** through Firestore and Storage security rules, separating shared manufacturing workflows from private financial data, then validated cross-tenant access, security rules, and complete end-to-end user journeys with Vitest, Testing Library, Firebase emulators, and Playwright.",
+        "Implemented **2 shipment controls** through Firebase Cloud Functions - calculation logic and validated fulfillment transitions - while React 19 and TypeScript kept onboarding, inventory, files, chat, and role-aware operational views connected across retailer and factory workflows."
+      ]
+    },
+    {
+      "title": "Private Filedrop | AI-Integrated File Exchange",
+      "strength": "supporting",
+      "target_matches": ["APIs", "AWS", "cloud", "services"],
+      "selection_reason": "Strongest independent backend match through secure API access, S3-compatible storage, webhooks, and deployment modes.",
+      "entry_priority": 1,
+      "date": "2026",
+      "summary": "Secure APIs and cross-session AI coordination",
+      "tech": "Node.js | Express | AWS S3 | OpenAPI | MCP | HMAC",
+      "bullets": [
+        "Exposed **4 secure backend interfaces** - REST, OpenAPI, MCP, and signed webhooks - over local and S3-compatible storage, giving browser, API, and AI clients documented upload, versioning, messaging, coordination, and durable migration paths across development and cloud environments.",
+        "Verified **2 webhook security checks** using HMAC-SHA256 signatures and timing-safe comparison, then documented local and cloud deployment paths so browser, API, and automation integrations could be tested repeatably without exposing storage credentials or weakening audit boundaries.",
+        "Supported **2 storage drivers** - local and S3-compatible - with documented migration tooling, upload validation, version history, and unguessable download links for durable service operation across development and cloud environments, repeatable recovery, and controlled file handoffs.",
+        "Documented **4 service operating modes** - local use, Render cloud deployment, ChatGPT Actions, and MCP clients - with environment-based setup and migration guidance for repeatable storage, messaging, testing, and cross-session coordination."
+      ]
+    },
+    {
+      "title": "Forge | Personal Fitness Intelligence Backend",
+      "strength": "supporting",
+      "target_matches": ["Python", "APIs", "cloud", "services"],
+      "selection_reason": "Direct backend and health-data match through FastAPI services, external integrations, scheduled synchronization, MongoDB Atlas, and Render deployment.",
+      "entry_priority": 2,
+      "date": "2026",
+      "summary": "Health-data integrations, scheduled services, and adherence analytics",
+      "tech": "Python | FastAPI | MongoDB Atlas | Render | REST APIs | webhooks",
+      "bullets": [
+        "Integrated **4 health-data sources** - Hevy, Oura, MyFitnessPal-derived Apple Health data, and Health Auto Export webhooks - through Python and FastAPI services into MongoDB Atlas for unified training, nutrition, sleep, heart-rate, recovery, and adherence analysis.",
+        "Implemented a **6-hour synchronization cycle** plus on-demand refresh and CSV ingestion, giving the backend repeatable scheduled and user-triggered paths for updating external health records without manual data consolidation, stale dashboards, or duplicated ingestion steps.",
+        "Deployed **1 FastAPI service** on Render with MongoDB Atlas and environment-based integration setup, then compared observed performance with a **12-week hypertrophy plan** to score workout, nutrition, and recovery adherence through documented cloud service paths."
+      ]
+    }
+  ],
+  "education": {
+    "school": "University of California, Davis",
+    "degree": "B.S. Computer Science",
+    "gpa": "3.7",
+    "date": "Davis, CA | Graduated Jun 2025",
+    "coursework": "Algorithms, Databases, Distributed Systems, Operating Systems, AI/ML, Data Structures"
+  },
+  "publication": "**ICER 2024** - Evaluating Exploratory Reading Groups for Supporting Undergraduate Research Pipelines in Computing - Research examining how structured exploratory reading groups support undergraduate computing research pipelines.",
+  "links": [
+    "Portfolio: https://ashchembu.com",
+    "LinkedIn: linkedin.com/in/ashwin-chembu-a5292b205",
+    "GitHub: github.com/ashwinchembu"
+  ]
+}

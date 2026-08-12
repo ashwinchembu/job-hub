@@ -1,0 +1,31 @@
+Official posting URL: https://jobs.ashbyhq.com/Lightfield/412ff3ec-19d5-41d9-847c-0a93a80ed191
+Verified live: 2026-07-23
+
+Full Stack Engineer, Product & Systems
+Location: HQ: San Francisco | Full time | On-site | Engineering
+Compensation: $150K-$300K base plus equity.
+
+About Lightfield
+Lightfield is an AI-native CRM that assembles itself from email, calendar, and meetings. It captures interactions and turns them into organized context, accounts, tasks, follow-ups, and insights. The company is rethinking CRM from first principles, adapting, automating, and surfacing insight that drives growth. The founders previously built Tome, a generative-AI presentation product; the team has worked on Llama, Instagram, Facebook Messenger, Pinterest, Google, and Salesforce.
+
+About the role
+Lightfield seeks an experienced, creative, versatile engineer to build scaled, performant features and systems that deliver innovative AI product experiences. Engineers own projects from inception to impact, collaborate across functions, deliver industry-leading solutions, and contribute to product and technical vision.
+
+What you will do
+- Collaborate with product leaders to identify customer problems, scope requirements, and implement solutions.
+- Build and maintain full-stack product features and systems end-to-end, ensuring reliability, scalability, and performance.
+- Develop observability and metrics for smooth operation, proactive issue detection, and continuous improvement.
+- Mentor teammates, participate in code reviews, and help shape engineering culture and practices.
+- Contribute to recruiting, mentorship, and knowledge sharing.
+
+Who you are
+- 2+ years of software-development experience with a strong front-end and back-end background.
+- Experience building scalable, high-performance systems for complex customer workflows and large-scale data processing.
+- Excited by large language models (LLMs) and systems that support and use them.
+- Able to ramp quickly on TypeScript, React, Next.js, Node.js, Apollo GraphQL, and PostgreSQL.
+- Strong software-engineering fundamentals with a computer-science or related degree.
+- Comfortable with ambiguity, independently driving projects, and delivering results in a fast-moving environment.
+- Clear communicator for technical and non-technical audiences; passionate about intuitive, intelligent customer products.
+
+Benefits and perks
+Competitive salary, meaningful early equity, medical/dental/vision health insurance, three weeks PTO, eleven paid holidays plus winter break, three months paid family leave, Wednesday work from home, team events, and a 401(k) plan.

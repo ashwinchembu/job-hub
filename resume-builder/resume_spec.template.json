@@ -1,0 +1,121 @@
+{
+  "metadata": {
+    "company": "Company",
+    "role": "Software Engineer",
+    "slug": "company_software_engineer",
+    "job_description_source": "Path or official job URL",
+    "primary_track": "full-stack software engineering",
+    "secondary_track": "backend/platform engineering",
+    "facts_reviewed_at": "YYYY-MM-DDTHH:MM:SSZ",
+    "fact_sheet_sha256": "SHA-256 of generated/CANDIDATE_MASTER_FACT_SHEET.md at review time",
+    "tailoring_standard_sha256": "SHA-256 of generated/RESUME_TAILORING_STANDARD.md at review time",
+    "required_website": "https://portfolio.example",
+    "matched_keywords": ["React", "TypeScript", "Python"],
+    "emphasis_terms": ["React", "TypeScript", "327K+ records", "Testing Library"],
+    "selection_rationale": "Explain why these experiences and projects are the strongest match."
+  },
+  "contact": {
+    "name": "Candidate Name",
+    "phone": "(000) 000-0000",
+    "email": "candidate@example.com",
+    "location": "City, State | https://portfolio.example | Open to eligible work models"
+  },
+  "profile": "**Full-stack engineer** focused on ...",
+  "skills": [
+    {"label": "Languages", "items": "Python, TypeScript, JavaScript, SQL"},
+    {"label": "Frontend", "items": "React, Next.js, Tailwind CSS"},
+    {"label": "Backend", "items": "FastAPI, Node.js, Express, MongoDB"}
+  ],
+  "experience": [
+    {
+      "title": "Most Relevant Experience | Company",
+      "strength": "strong",
+      "date": "Location | Dates",
+      "summary": "Job-relevant one-line scope",
+      "tech": "Python | React | SQL | AWS",
+      "bullets": [
+        "First job-specific evidence bullet with implementation detail.",
+        "Second job-specific evidence bullet with scale or outcome.",
+        "Third job-specific evidence bullet with testing, delivery, or collaboration.",
+        "Fourth job-specific evidence bullet with explicit verified scope or outcome.",
+        "Fifth job-specific evidence bullet with explicit verified scope or outcome."
+      ]
+    },
+    {
+      "title": "Second Relevant Experience",
+      "strength": "moderate",
+      "date": "Location | Dates",
+      "summary": "Job-relevant one-line scope",
+      "tech": "Relevant technologies",
+      "bullets": [
+        "First supported evidence bullet with implementation detail.",
+        "Second supported evidence bullet with scope or outcome.",
+        "Third supported evidence bullet with delivery or collaboration detail.",
+        "Fourth supported evidence bullet with explicit verified scope or outcome."
+      ]
+    },
+    {
+      "title": "Third Relevant Experience",
+      "strength": "supporting",
+      "date": "Location | Dates",
+      "summary": "Job-relevant one-line scope",
+      "tech": "Relevant technologies",
+      "bullets": [
+        "First supported evidence bullet with implementation detail.",
+        "Second supported evidence bullet with scope or outcome.",
+        "Third supported evidence bullet with delivery or collaboration detail."
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "title": "Most Relevant Project",
+      "strength": "strong",
+      "date": "2026",
+      "summary": "",
+      "tech": "",
+      "bullets": [
+        "First job-specific project bullet with implementation detail.",
+        "Second job-specific project bullet with architecture or integration detail.",
+        "Third job-specific project bullet with validation or outcome.",
+        "Fourth job-specific project bullet with explicit verified scope or outcome.",
+        "Fifth job-specific project bullet with explicit verified scope or outcome."
+      ]
+    },
+    {
+      "title": "Second Relevant Project",
+      "strength": "moderate",
+      "date": "Year",
+      "summary": "",
+      "tech": "",
+      "bullets": [
+        "First supported project bullet with implementation detail.",
+        "Second supported project bullet with architecture or integration detail.",
+        "Third supported project bullet with validation or outcome.",
+        "Fourth supported project bullet with explicit verified scope or outcome."
+      ]
+    },
+    {
+      "title": "Third Relevant Project",
+      "strength": "supporting",
+      "date": "Year",
+      "summary": "",
+      "tech": "",
+      "bullets": [
+        "First supported project bullet with implementation detail.",
+        "Second supported project bullet with architecture or integration detail.",
+        "Third supported project bullet with validation or outcome."
+      ]
+    }
+  ],
+  "education": {
+    "school": "University of California - Davis",
+    "degree": "B.S. Computer Science",
+    "gpa": "3.7",
+    "date": "Davis, CA | Graduated Jun 2025",
+    "coursework": "Algorithms, Databases, Distributed Systems, Operating Systems, AI/ML, Data Structures"
+  },
+  "certifications": ["AWS Certified Cloud Practitioner", "Google Data Analytics Certificate"],
+  "publication": "**ICER** - Evaluating Exploratory Reading Groups for Supporting Undergraduate Research Pipelines in Computing - **Jun 12, 2024**",
+  "links": ["Portfolio: https://portfolio.example", "LinkedIn: linkedin.com/in/candidate", "GitHub: github.com/candidate"]
+}

@@ -1,0 +1,25 @@
+OneCrew — Software Engineer (Fullstack)
+Official posting: https://jobs.ashbyhq.com/onecrew/a18a2aaa-882a-4011-adfe-91449fc75cf6
+Verified: July 21, 2026
+
+Location: San Francisco (FiDi Office)
+Employment Type: Full time
+Location Type: Hybrid; expected 3+ days in-office weekly
+Compensation: $150K–$210K plus equity
+
+We’re looking for a highly motivated and experienced Software Engineer to join OneCrew’s quickly growing team. You’ll play an instrumental role in defining and building out the product and platform with the co-founders and engineering team as we scale our customer base.
+
+What you'll do
+- Design, build, and ship new products and features—including AI-powered automation and intelligence—that directly impact how contractors estimate jobs, manage crews, and track profitability in real time.
+- Build and ship AI-driven features that set new standards for the industry—intelligent estimating, predictive crew optimization, and automated insights that help contractors make better decisions faster.
+- Own system reliability and performance: ensure our platform is secure, observable, automated, and built to scale as we grow.
+- Collaborate across engineering, product, and design to translate ideas into elegant, practical solutions that customers love.
+- Continuously refine technical standards and processes—from testing and deployment to documentation and code review—to improve how the team builds and ships.
+- Champion craftsmanship and collaboration.
+
+Qualifications
+- 3–6+ years of software engineering experience in a high-velocity environment.
+- Familiarity with TypeScript, Node.js, React, AWS, and PostgreSQL is a plus.
+- Posting text states “Does not Work Authorization to work in US”; the exact wording is ambiguous. Candidate is authorized to work in the United States and does not require current or future U.S. employment-immigration sponsorship.
+
+Benefits include equity, medical/dental/vision coverage, and unlimited PTO.

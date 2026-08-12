@@ -1,0 +1,160 @@
+{
+  "metadata": {
+    "company": "Lightfield",
+    "role": "Full Stack Engineer, Product & Systems",
+    "slug": "lightfield_full_stack_engineer_product_systems_v3_test",
+    "job_description_source": "generated/resume_specs/lightfield_full_stack_engineer_product_systems/job_description.txt",
+    "primary_track": "full-stack software engineering",
+    "secondary_track": "applied AI product engineering",
+    "tailoring_version": 3,
+    "facts_reviewed_at": "2026-08-11T20:00:00Z",
+    "fact_sheet_sha256": "c46baf29e131aac63540a438e2f5288c6a588cff7f042d5f87b0996c96091e92",
+    "tailoring_standard_sha256": "9767a7607658449f82bf6d18fd574c175cf27897a713d173a8a9f56eb1a60cae",
+    "required_website": "https://ashchembu.com",
+    "matched_keywords": ["TypeScript", "React", "Node.js", "full-stack", "LLM", "workflows", "reliability", "customer"],
+    "emphasis_terms": ["327K+ healthcare records", "67K+ healthcare records", "5-layer ETL/MDM architecture", "2 input types", "3 delivery surfaces", "158 GitHub commits", "44 backend-scoped commits", "20+ Git-attributed Node/Express REST routes", "43,340 anonymized interaction rows", "2,805 session IDs", "12.2K aggregate uses", "Python NLP", "React interfaces", "5 application safeguards", "five figures", "6 core multi-tenant workflows", "3 role groups", "Testing Library", "7 Android application", "2 access paths", "2 storage drivers", "2 webhook verification controls", "4 supported operating modes", "4 full-stack meeting workflows", "5-stage retrieval-augmented generation flow", "2 knowledge sources"],
+    "selection_rationale": "Prioritizes end-to-end React/TypeScript/Node.js product delivery, LLM and retrieval systems, complex workflows, stakeholder discovery, reliability, and product ownership without claiming Next.js, GraphQL, PostgreSQL, observability ownership, or mentorship.",
+    "body_tailoring_summary": "Makes Lume the first and strongest project, prioritizes Tallyrus founder delivery, and orders professional bullets around product discovery, full-stack AI systems, reliable workflows, and customer-facing implementation.",
+    "omitted_requirements": ["Next.js production ownership", "Apollo GraphQL", "PostgreSQL production ownership", "formal observability ownership", "engineering mentorship"],
+    "role_specific_bullets": [
+      "Built **4 full-stack intelligence workflows** for meeting capture, durable storage, transcript search, and grounded question answering, connecting React interfaces with Node.js, MongoDB, AWS S3, and WebSockets for responsive, persistent customer knowledge work.",
+      "Designed a **5-stage retrieval pipeline** covering embeddings, intent routing, evidence extraction, citation-backed generation, and generator/critic refinement so answers remained tied to meeting and document context with visible human-review evidence.",
+      "Unified **2 customer context sources** - transcripts and seed documents - into reusable Project Brain knowledge bases that preserved terminology, relationships, project history, and citation context across repeated search and question-answering sessions for persistent team knowledge.",
+      "Built an AI feedback product across **4 user workflows** using React, TypeScript, Python, LangChain, and Pinecone, translating educator needs into document ingestion, rubric scoring, grounded revision, and review experiences with consistent scoring logic and actionable feedback loops.",
+      "Iterated through **3 delivery activities** - user testing, rubric refinement, and full-stack releases - translating educator feedback into scoped product changes and helping raise **five figures** for continued early-stage development and validated review workflows.",
+      "Delivered React and FastAPI knowledge services across **2 evidence paths** - ingested documents and user questions - integrating AWS data services and Redis for grounded enterprise search, auditable document context, and repeatable stakeholder evaluation.",
+      "Converted **3 stakeholder artifacts** - requirements, UAT evidence, and decision logs - into Python/Flask endpoints plus S3 and Smartsheet integrations, connecting product discovery to validated implementation, documented handoffs, and repeatable delivery decisions."
+    ],
+    "bullet_evidence_audit": [
+      {"bullet":"Built **4 full-stack intelligence workflows** for meeting capture, durable storage, transcript search, and grounded question answering, connecting React interfaces with Node.js, MongoDB, AWS S3, and WebSockets for responsive, persistent customer knowledge work.","problem":"Fragmented meeting context","mechanism":"React, Node.js, MongoDB, AWS, WebSockets","implementation":"Four workflows","outcome":"Persistent customer knowledge"},
+      {"bullet":"Designed a **5-stage retrieval pipeline** covering embeddings, intent routing, evidence extraction, citation-backed generation, and generator/critic refinement so answers remained tied to meeting and document context with visible human-review evidence.","problem":"Ungrounded answers","mechanism":"Five-stage RAG pipeline","implementation":"Evidence and refinement flow","outcome":"Grounded reviewable answers"},
+      {"bullet":"Unified **2 customer context sources** - transcripts and seed documents - into reusable Project Brain knowledge bases that preserved terminology, relationships, project history, and citation context across repeated search and question-answering sessions for persistent team knowledge.","problem":"Scattered customer context","mechanism":"Knowledge bases","implementation":"Two source types","outcome":"Reusable project history"},
+      {"bullet":"Built an AI feedback product across **4 user workflows** using React, TypeScript, Python, LangChain, and Pinecone, translating educator needs into document ingestion, rubric scoring, grounded revision, and review experiences with consistent scoring logic and actionable feedback loops.","problem":"Educator feedback","mechanism":"React, TypeScript, Python, LangChain, Pinecone","implementation":"Four workflows","outcome":"Grounded review experience"},
+      {"bullet":"Iterated through **3 delivery activities** - user testing, rubric refinement, and full-stack releases - translating educator feedback into scoped product changes and helping raise **five figures** for continued early-stage development and validated review workflows.","problem":"Product iteration","mechanism":"Testing and releases","implementation":"Three activities","outcome":"Five figures raised"},
+      {"bullet":"Delivered React and FastAPI knowledge services across **2 evidence paths** - ingested documents and user questions - integrating AWS data services and Redis for grounded enterprise search, auditable document context, and repeatable stakeholder evaluation.","problem":"Enterprise search","mechanism":"React, FastAPI, AWS, Redis","implementation":"Two evidence paths","outcome":"Grounded evaluation"},
+      {"bullet":"Converted **3 stakeholder artifacts** - requirements, UAT evidence, and decision logs - into Python/Flask endpoints plus S3 and Smartsheet integrations, connecting product discovery to validated implementation, documented handoffs, and repeatable delivery decisions.","problem":"Ambiguous requirements","mechanism":"Python, Flask, S3, Smartsheet","implementation":"Three artifact types","outcome":"Validated handoffs"}
+    ]
+  },
+  "contact": {
+    "name": "Ashwin Chembu",
+    "phone": "(341)-356-1722",
+    "email": "ashchembu@gmail.com",
+    "location": "Fremont, CA | https://ashchembu.com | SF Hybrid / Onsite"
+  },
+  "profile": "Full-stack and applied-AI engineer with 2+ years of full-time experience building React, TypeScript, Node.js, and retrieval-grounded products from ambiguous customer problems through tested delivery.",
+  "skills": [
+    {"label": "Full Stack", "items": "TypeScript, JavaScript, React, Node.js, Express, Python, FastAPI, REST APIs"},
+    {"label": "Applied AI & Data", "items": "LLM APIs, RAG, vector search, MongoDB, Snowflake, AWS S3, Redis"},
+    {"label": "Product & Reliability", "items": "responsive workflows, pytest, Playwright, UAT, requirements, workflow validation"}
+  ],
+  "experience": [
+    {
+      "title": "Business Technology Solutions Associate | ZS Associates",
+      "strength": "strong",
+      "target_matches": ["full-stack", "workflows", "reliability", "customer"],
+      "selection_reason": "Professional evidence connects stakeholder requirements to full-stack AI, API, data, and reliable workflow delivery.",
+      "entry_priority": 1,
+      "date": "South San Francisco, CA | Jun 2024-Present",
+      "summary": "Healthcare AI, data, API integration, and workflow delivery",
+      "tech": "Python | FastAPI | React | Snowflake | AWS | pytest",
+      "bullets": [
+        "Developed Snowflake SQL pipelines for master-data extraction, identifier matching, and API connectivity across **327K+ healthcare records**, producing auditable quality-control reports and exception outputs for repeatable regulated stakeholder review, exception resolution, audit, and stewardship decisions.",
+        "Delivered React and FastAPI knowledge services across **2 evidence paths** - ingested documents and user questions - integrating AWS data services and Redis for grounded enterprise search, auditable document context, and repeatable stakeholder evaluation.",
+        "Converted **3 stakeholder artifacts** - requirements, UAT evidence, and decision logs - into Python/Flask endpoints plus S3 and Smartsheet integrations, connecting product discovery to validated implementation, documented handoffs, and repeatable delivery decisions."
+      ]
+    },
+    {
+      "title": "Data Analyst / Web Development Lead | Tech4Good @ UCSC",
+      "strength": "moderate",
+      "target_matches": ["TypeScript", "Node.js", "workflows", "customer"],
+      "selection_reason": "Shows collaborative TypeScript/Node.js product workflows, live updates, and measurable public research usage.",
+      "entry_priority": 3,
+      "date": "Mar 2023-Present",
+      "summary": "Collaborative research and classroom workflow tooling",
+      "tech": "TypeScript | Node.js | Express | MongoDB | Python | Figma APIs",
+      "bullets": [
+        "Contributed **158 GitHub commits**, including **44 backend-scoped commits** across TypeScript and Figma API chat, polling, Likert, text-entry, and export workflows in a collaborator-owned research toolkit, preserving accurate team ownership, public attribution, and research delivery evidence.",
+        "Implemented **20+ Git-attributed Node/Express REST routes** backed by three MongoDB databases, populated message logs, change streams, and persisted poll and voter records, reliably synchronizing threads, edits, anonymous responses, votes, grouped responses, reveal operations, and live updates.",
+        "Analyzed **43,340 anonymized interaction rows** across **2,805 session IDs** with Python and Pandas notebooks, while six team-published Figma Community resources reached approximately **12.2K aggregate uses** with team-library attribution preserved for reproducible analytics and public research reporting."
+      ]
+    },
+    {
+      "title": "Founder and Lead Developer | Tallyrus",
+      "strength": "supporting",
+      "target_matches": ["TypeScript", "React", "LLM", "customer"],
+      "selection_reason": "Founder evidence demonstrates end-to-end AI product ownership, user testing, and iterative workflow design.",
+      "entry_priority": 2,
+      "date": "Jun 2023-Present",
+      "summary": "Full-stack retrieval tooling for educator feedback",
+      "tech": "Python | React | TypeScript | Flask | MongoDB | LangChain",
+      "bullets": [
+        "Built an AI feedback product across **4 user workflows** using React, TypeScript, Python, LangChain, and Pinecone, translating educator needs into document ingestion, rubric scoring, grounded revision, and review experiences with consistent scoring logic and actionable feedback loops.",
+        "Implemented **5 application safeguards** across the React/TypeScript and Express product, including Google OAuth, protected routes, secure sessions, rate limiting, and Helmet security headers, while MongoDB and S3 managed application and document data for retrieval-based grading workflows.",
+        "Iterated through **3 delivery activities** - user testing, rubric refinement, and full-stack releases - translating educator feedback into scoped product changes and helping raise **five figures** for continued early-stage development and validated review workflows.",
+        "Connected **3 product data systems** - MongoDB application state, S3 documents, and Pinecone retrieval - through Python and Node.js services so rubric edits, uploaded evidence, and grounded feedback remained synchronized across review sessions, scoring decisions, and educator follow-up."
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "title": "Sylk | Multi-Tenant Supply-Chain Platform",
+      "strength": "supporting",
+      "target_matches": ["TypeScript", "React", "workflows", "reliability"],
+      "selection_reason": "Demonstrates complex multi-tenant workflows, authorization boundaries, cross-platform delivery, and automated validation.",
+      "entry_priority": 2,
+      "date": "2025-Present",
+      "summary": "Role-aware web and Android product with tested tenant isolation",
+      "tech": "React 19 | TypeScript | Firebase | Capacitor 7 | Playwright",
+      "bullets": [
+        "Built **6 core multi-tenant workflows** covering organization onboarding, shipments, fulfillment, tracking, file collaboration, and real-time chat, separating retailer-only financial data from shared manufacturing views while supporting retailer administrators, factory viewers, and staff across mobile interfaces.",
+        "Enforced permissions for **3 role groups** through Firestore and Storage security rules, separating shared manufacturing workflows from private financial data, then validated cross-tenant access, security rules, and complete end-to-end user journeys with Vitest, Testing Library, Firebase emulators, and Playwright.",
+        "Packaged the React product as a **Capacitor 7 Android application**, adding native-safe routing, Firebase Authentication, safe-area handling, legacy WebView fallbacks, mobile file compatibility, and repeatable Gradle workflows that successfully produced an inspected 7.8 MB APK with minimum SDK 23."
+      ]
+    },
+    {
+      "title": "Private Filedrop | AI-Integrated File Exchange",
+      "strength": "supporting",
+      "target_matches": ["Node.js", "workflows", "reliability", "customer"],
+      "selection_reason": "Provides secure backend and deployment evidence but is secondary to Lightfield's direct AI product requirements.",
+      "entry_priority": 3,
+      "date": "2026",
+      "summary": "Secure APIs and cross-session AI coordination",
+      "tech": "Node.js | Express | AWS S3 | OpenAPI | MCP | HMAC",
+      "bullets": [
+        "Secured **2 access paths** with password-protected browser uploads and API-key-protected programmatic exchange, adding upload validation, metadata, categories, tags, project paths, auditable version history, and unguessable direct-download links for controlled secure cross-session file handoff systems.",
+        "Implemented **2 storage drivers** - local and S3-compatible - plus documented migration tooling for durable deployment, while REST, OpenAPI, and MCP interfaces exposed upload, download, organization, versioning, message, channel, and webhook operations to browsers, APIs, and AI clients.",
+        "Protected automation using **2 webhook verification controls** with HMAC-SHA256 signatures and timing-safe checks, then added shared mailbox and channel abstractions so sessions could exchange control messages and events with cross-session auditability without exposing storage credentials."
+      ]
+    },
+    {
+      "title": "Lume | AI Meeting Intelligence Platform",
+      "strength": "supporting",
+      "target_matches": ["React", "Node.js", "LLM", "full-stack", "workflows"],
+      "selection_reason": "Most direct Lightfield match: a full-stack meeting intelligence product using grounded retrieval and real-time knowledge workflows.",
+      "entry_priority": 1,
+      "date": "Dec 2025-Present",
+      "summary": "Document-grounded meeting knowledge and search",
+      "tech": "React 18 | Node.js | MongoDB | AWS S3 | WebSockets | RAG",
+      "bullets": [
+        "Built **4 full-stack intelligence workflows** for meeting capture, durable storage, transcript search, and grounded question answering, connecting React interfaces with Node.js, MongoDB, AWS S3, and WebSockets for responsive, persistent customer knowledge work.",
+        "Designed a **5-stage retrieval pipeline** covering embeddings, intent routing, evidence extraction, citation-backed generation, and generator/critic refinement so answers remained tied to meeting and document context with visible human-review evidence.",
+        "Unified **2 customer context sources** - transcripts and seed documents - into reusable Project Brain knowledge bases that preserved terminology, relationships, project history, and citation context across repeated search and question-answering sessions for persistent team knowledge."
+        ,"Implemented **3 real-time product behaviors** - responsive search, WebSocket updates, and transcript-aware navigation - so meeting capture, evidence review, grounded follow-up, and reusable project context remained connected across active knowledge sessions and responsive customer workflows.",
+        "Separated **2 answer-quality stages** - evidence extraction and generator/critic refinement - from the responsive React experience, preserving citation-backed outputs, visible human-review context, and grounded document evidence before users reused project knowledge across later decisions and sessions."
+      ]
+    }
+  ],
+  "education": {
+    "school": "University of California, Davis",
+    "degree": "B.S. Computer Science",
+    "gpa": "3.7",
+    "date": "Davis, CA | Graduated Jun 2025",
+    "coursework": "Algorithms, Databases, Distributed Systems, Operating Systems, AI/ML, Data Structures"
+  },
+  "publication": "**ICER 2024** - Evaluating Exploratory Reading Groups for Supporting Undergraduate Research Pipelines in Computing - Research examining how structured exploratory reading groups support undergraduate computing research pipelines.",
+  "links": [
+    "Portfolio: https://ashchembu.com",
+    "LinkedIn: linkedin.com/in/ashwin-chembu-a5292b205",
+    "GitHub: github.com/ashwinchembu"
+  ]
+}
