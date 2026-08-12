@@ -1,0 +1,73 @@
+Ashwin Chembu
+(341)-356-1722 | ashchembu@gmail.com | Fremont, CA | https://ashchembu.com | SF Hybrid / Onsite
+PROFILE
+Backend and full-stack engineer with 2+ years of full-time experience building Python services, AWS integrations, healthcare data workflows, reliable APIs, and tested
+cloud products.
+TECHNICAL SKILLS
+Languages & Services: Python, TypeScript, JavaScript, SQL, FastAPI, Node.js, Express, REST APIs
+Cloud & Data: AWS S3, Snowflake, MongoDB, MySQL, Redis, document ingestion, data-quality workflows
+Full Stack & Quality: React, pytest, Vitest, Testing Library, Playwright, UAT, workflow validation
+EXPERIENCE
+Business Technology Solutions Associate | ZS Associates South San Francisco, CA | Jun 2024-Present
+Healthcare AI, data, API integration, and workflow delivery Python | FastAPI | React | Snowflake | AWS | pytest
+• Built Snowflake SQL and Python service workflows across 327K+ healthcare records, joining identifiers, specialties, and
+addresses with API connectivity and producing auditable exception reports for regulated product and stakeholder decisions.
+• Designed reconciliation services across 67K+ healthcare records using NPI, DEA, HIN, 340B, licenses, addresses, and fuzzy
+matching, routing ambiguous entities into deterministic stewardship review instead of silently publishing uncertain matches.
+• Defined a 5-layer healthcare data architecture from landing through publication, adding data-quality rules, delta processing, history tracking, and
+source-to-target mappings so service outputs remained maintainable, traceable, audit-ready, and understandable to technical and product stakeholders.
+• Implemented Python/Flask services across 3 cloud workflow components - API endpoints, AWS S3 storage, and Smartsheet
+integrations - automating document handoffs while preserving requirements, UAT evidence, and implementation documentation.
+• Validated 2 enterprise workflow layers - live CRM behavior and application metadata - then converted discrepancies into acceptance
+criteria, prioritized backlog items, test evidence, and implementation-ready artifacts for product owners, engineers, and internal stakeholders.
+Data Analyst / Web Development Lead | Tech4Good @ UCSC Mar 2023-Present
+Collaborative research and classroom workflow tooling TypeScript | Node.js | Express | MongoDB | Python | Figma APIs
+• Contributed 158 GitHub commits, including 44 backend-scoped commits across TypeScript and Figma API chat, polling, Likert, text-entry, and
+export workflows in a collaborator-owned research toolkit, preserving accurate team ownership, public attribution, and research delivery evidence.
+• Implemented 20+ Git-attributed Node/Express REST routes backed by three MongoDB databases, populated message logs, change streams, and
+persisted poll and voter records, reliably synchronizing threads, edits, anonymous responses, votes, grouped responses, reveal operations, and live updates.
+• Analyzed 43,340 anonymized interaction rows across 2,805 session IDs with Python and Pandas notebooks, while six team-published Figma Community
+resources reached approximately 12.2K aggregate uses with team-library attribution preserved for reproducible analytics and public research reporting.
+Founder and Lead Developer | Tallyrus Jun 2023-Present
+Full-stack retrieval tooling for educator feedback Python | React | TypeScript | Flask | MongoDB | LangChain
+• Built a retrieval-augmented grading workflow across 4 stages - document ingestion, Pinecone vector search, rubric scoring, and educator feedback -
+connecting Python NLP services to React interfaces that preserved consistent scoring logic, actionable review loops, and grading decisions for educators.
+• Implemented 5 application safeguards across the React/TypeScript and Express product, including Google OAuth, protected routes, secure sessions,
+rate limiting, and Helmet security headers, while MongoDB and S3 managed application and document data for retrieval-based grading workflows.
+• Maintained 3 backend data paths - MongoDB application state, S3 document storage, and Pinecone retrieval - through Python
+and Flask services, keeping ingestion, rubric scoring, and educator feedback synchronized across tested document workflows.
+PROJECTS
+Private Filedrop | AI-Integrated File Exchange 2026
+Secure APIs and cross-session AI coordination Node.js | Express | AWS S3 | OpenAPI | MCP | HMAC
+• Exposed 4 secure backend interfaces - REST, OpenAPI, MCP, and signed webhooks - over local and S3-compatible storage, giving browser, API,
+and AI clients documented upload, versioning, messaging, coordination, and durable migration paths across development and cloud environments.
+• Verified 2 webhook security checks using HMAC-SHA256 signatures and timing-safe comparison, then documented local and cloud deployment
+paths so browser, API, and automation integrations could be tested repeatably without exposing storage credentials or weakening audit boundaries.
+• Supported 2 storage drivers - local and S3-compatible - with documented migration tooling, upload validation, version history, and unguessable
+download links for durable service operation across development and cloud environments, repeatable recovery, and controlled file handoffs.
+• Documented 4 service operating modes - local use, Render cloud deployment, ChatGPT Actions, and MCP clients - with
+environment-based setup and migration guidance for repeatable storage, messaging, testing, and cross-session coordination.
+Forge | Personal Fitness Intelligence Backend 2026
+Health-data integrations, scheduled services, and adherence analytics Python | FastAPI | MongoDB Atlas | Render | REST APIs | webhooks
+• Integrated 4 health-data sources - Hevy, Oura, MyFitnessPal-derived Apple Health data, and Health Auto Export webhooks - through
+Python and FastAPI services into MongoDB Atlas for unified training, nutrition, sleep, heart-rate, recovery, and adherence analysis.
+• Implemented a 6-hour synchronization cycle plus on-demand refresh and CSV ingestion, giving the backend repeatable scheduled and
+user-triggered paths for updating external health records without manual data consolidation, stale dashboards, or duplicated ingestion steps.
+• Deployed 1 FastAPI service on Render with MongoDB Atlas and environment-based integration setup, then compared observed performance
+with a 12-week hypertrophy plan to score workout, nutrition, and recovery adherence through documented cloud service paths.
+Sylk | Multi-Tenant Supply-Chain Platform 2025-Present
+Role-aware web and Android product with tested tenant isolation React 19 | TypeScript | Firebase | Capacitor 7 | Playwright
+• Built 6 core multi-tenant workflows covering organization onboarding, shipments, fulfillment, tracking, file collaboration, and real-time chat, separating
+retailer-only financial data from shared manufacturing views while supporting retailer administrators, factory viewers, and staff across mobile interfaces.
+• Enforced permissions for 3 role groups through Firestore and Storage security rules, separating shared manufacturing workflows from private financial data,
+then validated cross-tenant access, security rules, and complete end-to-end user journeys with Vitest, Testing Library, Firebase emulators, and Playwright.
+• Implemented 2 shipment controls through Firebase Cloud Functions - calculation logic and validated fulfillment transitions - while React
+19 and TypeScript kept onboarding, inventory, files, chat, and role-aware operational views connected across retailer and factory workflows.
+EDUCATION
+University of California, Davis | B.S. Computer Science | GPA: 3.7 Davis, CA | Graduated Jun 2025
+Relevant Foundation: Algorithms, Databases, Distributed Systems, Operating Systems, AI/ML, Data Structures
+PUBLICATION
+ICER 2024 - Evaluating Exploratory Reading Groups for Supporting Undergraduate Research Pipelines in Computing - Research examining how structured
+exploratory reading groups support undergraduate computing research pipelines.
+LINKS
+Portfolio: https://ashchembu.com | LinkedIn: linkedin.com/in/ashwin-chembu-a5292b205 | GitHub: github.com/ashwinchembu

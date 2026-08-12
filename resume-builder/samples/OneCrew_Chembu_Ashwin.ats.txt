@@ -1,0 +1,73 @@
+Ashwin Chembu
+(341)-356-1722 | ashchembu@gmail.com | Fremont, CA | https://ashchembu.com | SF Hybrid / Onsite
+PROFILE
+Product-focused full-stack engineer with 2+ years of full-time experience shipping React, TypeScript, Node.js, AWS, and applied-AI workflows from ambiguous ideas
+through tested delivery.
+TECHNICAL SKILLS
+Product & Frontend: TypeScript, JavaScript, React, responsive interfaces, workflow design
+Backend & Applied AI: Node.js, Express, Python, FastAPI, REST APIs, AWS S3, RAG, vector search
+Reliability & Quality: pytest, Vitest, Testing Library, Playwright, security rules, workflow validation
+EXPERIENCE
+Founder and Lead Developer | Tallyrus Jun 2023-Present
+Full-stack retrieval tooling for educator feedback Python | React | TypeScript | Flask | MongoDB | LangChain
+• Built an educator-facing AI product across 4 connected workflows - rubric setup, document ingestion, retrieval-grounded scoring, and feedback review -
+using React, TypeScript, Python, and Pinecone to turn an ambiguous grading problem into a testable end-to-end experience for structured educator review.
+• Implemented 5 application safeguards across Node.js and React services - Google OAuth, protected routes, secure sessions, rate
+limiting, and Helmet headers - while MongoDB and S3 preserved application and document state for reliable educator workflows.
+• Led 3 product-delivery loops spanning user interviews, rubric iteration, and full-stack releases, translating educator feedback into
+scoped features and helping secure five figures for continued development through validated product decisions and review workflows.
+• Connected 3 persistence systems - MongoDB application state, S3 documents, and Pinecone retrieval - through Python and
+Node.js services so rubric edits, uploaded evidence, and generated feedback stayed synchronized across the educator workflow.
+• Owned 4 delivery functions - product planning, user testing, full-stack implementation, and fundraising - turning educator
+feedback into scoped releases, secure review paths, documented product decisions, and continued early-stage product development.
+Business Technology Solutions Associate | ZS Associates South San Francisco, CA | Jun 2024-Present
+Healthcare AI, data, API integration, and workflow delivery Python | FastAPI | React | Snowflake | AWS | pytest
+• Developed Snowflake SQL pipelines for master-data extraction, identifier matching, and API connectivity across 327K+ healthcare records, producing
+auditable quality-control reports and exception outputs for repeatable regulated stakeholder review, exception resolution, audit, and stewardship decisions.
+• Connected 3 delivery surfaces - Python services, AWS S3 storage, and Smartsheet workflows - through Flask endpoints and
+documented UAT evidence, automating document handoffs while keeping implementation decisions and stakeholder validation traceable.
+• Built React and FastAPI knowledge-search services connecting documents and user questions across 2 backend layers - AWS data services
+and Redis retrieval state - so teams could evaluate grounded evidence with less manual coordination and repeatable service behavior.
+Data Analyst / Web Development Lead | Tech4Good @ UCSC Mar 2023-Present
+Collaborative research and classroom workflow tooling TypeScript | Node.js | Express | MongoDB | Python | Figma APIs
+• Contributed 158 GitHub commits, including 44 backend-scoped commits across TypeScript and Figma API chat, polling, Likert, text-entry, and
+export workflows in a collaborator-owned research toolkit, preserving accurate team ownership, public attribution, and research delivery evidence.
+• Implemented 20+ Git-attributed Node/Express REST routes backed by three MongoDB databases, populated message logs, change streams, and
+persisted poll and voter records, reliably synchronizing threads, edits, anonymous responses, votes, grouped responses, reveal operations, and live updates.
+• Analyzed 43,340 anonymized interaction rows across 2,805 session IDs with Python and Pandas notebooks, while six team-published Figma Community
+resources reached approximately 12.2K aggregate uses with team-library attribution preserved for reproducible analytics and public research reporting.
+PROJECTS
+Sylk | Multi-Tenant Supply-Chain Platform 2025-Present
+Role-aware web and Android product with tested tenant isolation React 19 | TypeScript | Firebase | Capacitor 7 | Playwright
+• Shipped 6 customer workflows for organization onboarding, shipments, fulfillment, tracking, file collaboration, and real-time
+chat using React 19 and TypeScript, separating retailer financial data from shared factory operations across responsive interfaces.
+• Protected 3 user groups with Firebase Authentication plus Firestore and Storage rules, then exercised cross-tenant permissions and complete
+product journeys through Vitest, Testing Library, emulators, and Playwright before packaging responsive web and Android releases.
+• Delivered 1 Android product package with Capacitor 7, native-safe routing, Firebase Authentication, file picking, and Gradle automation,
+validating a 7.8 MB debug APK and minimum SDK 23 across repeatable build, compatibility, authentication, and mobile file-handling checks.
+Lume | AI Meeting Intelligence Platform Dec 2025-Present
+Document-grounded meeting knowledge and search React 18 | Node.js | MongoDB | AWS S3 | WebSockets | RAG
+• Built 4 intelligent meeting workflows for capture, storage, search, and grounded question answering, connecting React to Node.js, MongoDB, AWS
+S3, and WebSockets so users could move from raw conversations to reusable project context and citation-backed evidence across repeated sessions.
+• Designed a 5-stage retrieval-augmented generation flow using vector embeddings, intent routing, evidence extraction, citation-backed answers, and
+generator/critic refinement, keeping responses grounded in meeting and document context with human-review evidence instead of unsupported model output.
+• Connected 2 knowledge sources - meeting transcripts and seed files - into reusable Project Brain knowledge bases preserving terminology, relationships, and
+project context for transcript-aware search, citation-backed document answers, reusable user capabilities, and repeated knowledge workflows across sessions.
+Private Filedrop | AI-Integrated File Exchange 2026
+Secure APIs and cross-session AI coordination Node.js | Express | AWS S3 | OpenAPI | MCP | HMAC
+• Secured 2 access paths with password-protected browser uploads and API-key-protected programmatic exchange, adding upload validation, metadata,
+categories, tags, project paths, auditable version history, and unguessable direct-download links for controlled secure cross-session file handoff systems.
+• Implemented 2 storage drivers - local and S3-compatible - plus documented migration tooling for durable deployment, while REST, OpenAPI, and
+MCP interfaces exposed upload, download, organization, versioning, message, channel, and webhook operations to browsers, APIs, and AI clients.
+• Protected automation using 2 webhook verification controls with HMAC-SHA256 signatures and timing-safe checks, then added shared mailbox
+and channel abstractions so sessions could exchange control messages and events with cross-session auditability without exposing storage credentials.
+• Documented 4 supported operating modes - local use, cloud deployment, ChatGPT Actions, and MCP clients - after deploying through Render
+configuration, giving browser users, API consumers, and AI sessions repeatable setup paths for secure file storage, messaging, and cross-session coordination.
+EDUCATION
+University of California, Davis | B.S. Computer Science | GPA: 3.7 Davis, CA | Graduated Jun 2025
+Relevant Foundation: Algorithms, Databases, Distributed Systems, Operating Systems, AI/ML, Data Structures
+PUBLICATION
+ICER 2024 - Evaluating Exploratory Reading Groups for Supporting Undergraduate Research Pipelines in Computing - Research examining how structured
+exploratory reading groups support undergraduate computing research pipelines.
+LINKS
+Portfolio: https://ashchembu.com | LinkedIn: linkedin.com/in/ashwin-chembu-a5292b205 | GitHub: github.com/ashwinchembu
