@@ -3,7 +3,7 @@
 import { ChangeEvent, FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { BLIND_75_TOTAL, blind75CoverageCount, interviewPlan, InterviewProblem, weekThemes } from "./data";
 
-type View = "overview" | "applications" | "prep" | "data";
+type View = "overview" | "matches" | "applications" | "prep" | "data";
 type ApplicationStatus =
   | "Saved"
   | "Preparing"
@@ -1550,6 +1550,62 @@ export default function JobHub() {
     );
   }
 
+  function renderMatches() {
+    const matchCandidates = applications
+      .filter((application) => ["Saved", "Preparing"].includes(application.status))
+      .sort((a, b) => {
+        const priorityRank = { High: 0, Medium: 1, Low: 2 };
+        return priorityRank[a.priority] - priorityRank[b.priority];
+      })
+      .slice(0, 12);
+
+    const scoreFor = (application: Application) => {
+      const priorityScore = application.priority === "High" ? 92 : application.priority === "Medium" ? 84 : 76;
+      const salaryEvidence = application.salaryMin || application.salaryMax ? 3 : 0;
+      const locationSignal = /san francisco|bay area|remote/i.test(application.location) ? 3 : 0;
+      return Math.min(98, priorityScore + salaryEvidence + locationSignal);
+    };
+
+    return (
+      <>
+        <section className="matches-hero">
+          <div>
+            <p className="eyebrow">New matches</p>
+            <h1>Roles worth your time.</h1>
+            <p>Fresh discoveries are ranked from your verified experience, location, compensation evidence, and current application state. You stay in control of every application.</p>
+          </div>
+          <div className="matches-hero-stat"><strong>{matchCandidates.length}</strong><span>ready to review</span><small>Refreshed by the morning job search</small></div>
+        </section>
+
+        <section className="match-list" aria-label="Job matches">
+          {matchCandidates.map((application, index) => (
+            <article className="match-card" key={application.id}>
+              <div className="match-rank">{String(index + 1).padStart(2, "0")}</div>
+              <div className="match-main">
+                <div className="match-title-row">
+                  <div><span>{application.company}</span><h2>{application.role}</h2></div>
+                  <strong className="match-score">{scoreFor(application)}%</strong>
+                </div>
+                <div className="match-meta">
+                  <span>{application.location || "Location under review"}</span>
+                  <span>{application.salaryMin || application.salaryMax ? `${application.salaryMin || "?"}–${application.salaryMax || "?"}` : "Compensation not published"}</span>
+                  <span>{application.workbookStatus || application.status}</span>
+                </div>
+                <p>{application.notes || application.nextAction || "Review the verified posting and evidence package before moving forward."}</p>
+                <div className="match-actions">
+                  <button className="primary-button" onClick={() => { setApplicationDraft(application); setView("applications"); }}>Review & prepare</button>
+                  {application.link && <a className="secondary-button" href={application.link} target="_blank" rel="noreferrer">Official posting ↗</a>}
+                  <button className="text-button" onClick={() => setApplications((items) => items.map((item) => item.id === application.id ? { ...item, status: "Closed", nextAction: "Skipped from matches" } : item))}>Skip</button>
+                </div>
+              </div>
+            </article>
+          ))}
+          {!matchCandidates.length && <div className="empty-state match-empty"><strong>You are caught up.</strong><span>The next morning discovery run will place qualified roles here.</span></div>}
+        </section>
+      </>
+    );
+  }
+
   function renderPrep() {
     const weekProblems = interviewPlan.filter((problem) => problem.week === prepWeek);
     const completedInWeek = weekProblems.filter((problem) => ["Solved with Hint", "Solved Independently"].includes(progress[String(problem.id)]?.status)).length;
@@ -1635,15 +1691,17 @@ export default function JobHub() {
         <div className="brand-mark"><span>JH</span><div><strong>Job Hub</strong><small>Local workspace</small></div></div>
         <nav aria-label="Main navigation">
           <button className={view === "overview" ? "active" : ""} onClick={() => setView("overview")}><span>01</span>Overview</button>
-          <button className={view === "applications" ? "active" : ""} onClick={() => setView("applications")}><span>02</span>Applications</button>
-          <button className={view === "prep" ? "active" : ""} onClick={() => setView("prep")}><span>03</span>Interview prep</button>
-          <button className={view === "data" ? "active" : ""} onClick={() => setView("data")}><span>04</span>Data & backup</button>
+          <button className={view === "matches" ? "active" : ""} onClick={() => setView("matches")}><span>02</span>Matches</button>
+          <button className={view === "applications" ? "active" : ""} onClick={() => setView("applications")}><span>03</span>Applications</button>
+          <button className={view === "prep" ? "active" : ""} onClick={() => setView("prep")}><span>04</span>Interview prep</button>
+          <button className={view === "data" ? "active" : ""} onClick={() => setView("data")}><span>05</span>Data & backup</button>
         </nav>
         <div className="sidebar-foot"><span className={`local-dot ${sheetSync.status === "error" ? "has-error" : ""}`} />{sheetSync.status === "connected" ? "Workbook connected" : "Local workspace"}<button onClick={exportBackup}>Export backup</button></div>
       </aside>
       <main className="main-content">
-        <header className="mobile-header"><div className="brand-mark"><span>JH</span><strong>Job Hub</strong></div><select value={view} onChange={(event) => setView(event.target.value as View)} aria-label="Choose page"><option value="overview">Overview</option><option value="applications">Applications</option><option value="prep">Interview prep</option><option value="data">Data & backup</option></select></header>
+        <header className="mobile-header"><div className="brand-mark"><span>JH</span><strong>Job Hub</strong></div><select value={view} onChange={(event) => setView(event.target.value as View)} aria-label="Choose page"><option value="overview">Overview</option><option value="matches">Matches</option><option value="applications">Applications</option><option value="prep">Interview prep</option><option value="data">Data & backup</option></select></header>
         {view === "overview" && renderOverview()}
+        {view === "matches" && renderMatches()}
         {view === "applications" && renderApplications()}
         {view === "prep" && renderPrep()}
         {view === "data" && renderData()}
