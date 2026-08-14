@@ -15,6 +15,22 @@ type ApplicationStatus =
 type PrepStatus = "Not Started" | "Attempted" | "Solved with Hint" | "Solved Independently";
 type ReviewVerdict = "Correct" | "Mostly correct" | "Incorrect" | "Needs more context";
 
+type CompanyScreeningPrep = {
+  status: "Not started" | "Researching" | "Ready to rehearse" | "Rehearsed";
+  researchedAt: string;
+  companySnapshot: string;
+  whyCompany: string;
+  recruiterPitch: string;
+  roleFit: string;
+  technicalStories: string;
+  likelyQuestions: string;
+  questionsToAsk: string;
+  interviewProcess: string;
+  risksAndBoundaries: string;
+  sources: string;
+  checklist: string;
+};
+
 type CodeReview = {
   verdict: ReviewVerdict;
   score: number;
@@ -90,6 +106,7 @@ type Application = {
   latestEmail?: string;
   latestEmailSubject?: string;
   resumePath?: string;
+  screeningPrep?: CompanyScreeningPrep;
   sheetSynced?: boolean;
   demo?: boolean;
 };
@@ -157,6 +174,70 @@ const applicationStatuses: ApplicationStatus[] = [
   "Rejected",
   "Closed",
 ];
+
+const emptyScreeningPrep: CompanyScreeningPrep = {
+  status: "Not started",
+  researchedAt: "",
+  companySnapshot: "",
+  whyCompany: "",
+  recruiterPitch: "",
+  roleFit: "",
+  technicalStories: "",
+  likelyQuestions: "",
+  questionsToAsk: "",
+  interviewProcess: "",
+  risksAndBoundaries: "",
+  sources: "",
+  checklist: "Research company and products\nWrite a specific why-company answer\nPrepare a 60-second introduction\nMap three verified technical stories\nPractice likely recruiter questions\nPrepare three questions to ask\nConfirm interview stages and logistics",
+};
+
+const guidewireScreeningPrep: CompanyScreeningPrep = {
+  status: "Ready to rehearse",
+  researchedAt: "2026-08-13",
+  companySnapshot: "Guidewire builds the cloud platform used by property-and-casualty insurers. Its core products cover policy administration, claims, billing, pricing, and underwriting. Guidewire reports 570+ insurer customers and 1,700+ successful implementations. Its current AI direction combines agentic and predictive AI with insurance-specific context, Cloud APIs, MCP servers, governance, and embedded workflows.",
+  whyCompany: "I’m interested in Guidewire because it combines the kind of full-stack and applied-AI work I enjoy with workflows that have real operational consequences. The company is not adding a generic chatbot to insurance—it is grounding agents and predictive models in policy, claims, underwriting, and service data, with governance and human control built into the platform. That matches how I like to build AI systems: useful inside an existing workflow, evidence-grounded, testable, and safe. I also like that the role uses React and TypeScript on the product side and Python or Java on the service side, so I can contribute across the stack while learning the P&C domain deeply.",
+  recruiterPitch: "I’m a Bay Area full-stack and applied-AI engineer with a UC Davis computer science degree and more than two years at ZS, where I’ve built React and FastAPI services, RAG workflows, APIs, and data-quality systems for regulated enterprise work. Outside work, I’ve built end-to-end AI products including Lume, a meeting-intelligence platform with document ingestion, vector retrieval, evidence extraction, citations, and generator-critic refinement. This Guidewire role stood out because it joins React and TypeScript product engineering with Python, agentic AI, and enterprise workflows where reliability and clear reasoning matter.",
+  roleFit: "Strong matches: 2+ years of professional software engineering at ZS; Python; React and TypeScript; FastAPI and REST APIs; RAG, vector retrieval, prompt workflows, MCP, human-in-the-loop automation; AWS data services; testing with pytest, Vitest, Testing Library, Playwright, and emulator-backed tests; Bay Area availability; no sponsorship required. Honest gaps: Java is supported by coursework and language experience but is not the primary professional stack; no prior Guidewire platform or P&C insurance-domain experience.",
+  technicalStories: "1. Lume — explain ingestion, embeddings, retrieval, evidence extraction, citations, generator/critic refinement, failure modes, and how grounding is validated.\n2. ZS applied AI — explain translating ambiguous regulated-enterprise needs into React/FastAPI services, document workflows, tests, and stakeholder-ready outputs without naming clients.\n3. Job-search operations — explain agentic automation with persisted per-application approval, JSONL request/decision/action logs, duplicate prevention, CAPTCHA blocking, and authoritative submission confirmation.\n4. Sylk — use for React/TypeScript depth, Firebase multi-tenancy, role-based permissions, security rules, and Vitest/Playwright/emulator testing.",
+  likelyQuestions: "Tell me about yourself.\nWhy Guidewire?\nWhy insurance technology?\nWhy are you interested in this specific junior full-stack AI role?\nDescribe an AI feature you built end to end.\nHow have you used React and TypeScript in a real product?\nAre you stronger in Java or Python?\nWhat does agentic AI mean to you, and where should human approval remain?\nTell me about a difficult technical problem or ambiguous requirement.\nWhy are you considering leaving ZS?\nAre you comfortable working in the Bay Area?\nDo you now or later need sponsorship?\nWhat compensation range are you targeting?",
+  questionsToAsk: "What would the first AI-assisted workflow this engineer owns look like?\nHow does the team divide work across React/TypeScript, Python or Java services, and Guidewire platform integrations?\nHow do you evaluate agent quality, correctness, and safe autonomy before an AI feature reaches underwriting or claims users?\nWhat distinguishes someone who succeeds in the coding challenge and the later conversation with Travis McKlesky?\nWhat would strong performance look like in the first 90 days?",
+  interviewProcess: "Expected sequence from the referral note: recruiter screen with Annie Palathingal → online coding challenge → hiring-manager conversation with Travis McKlesky. Hiring philosophy communicated by the team: attitude + aptitude + skills, in that order. Treat the exact sequence as referral guidance and confirm it with the recruiter.",
+  risksAndBoundaries: "Do not claim professional Java ownership, Guidewire/Gosu/Jutro experience, P&C insurance expertise, or unsupported production scale. Say Python is the strongest backend language while Java fundamentals are available and you are ready to ramp. Keep ZS client identities and private artifacts confidential. Do not use the unverified 30%, 40%, or 25% metrics. Compensation was not listed in the referral post, so ask the recruiter for the budgeted base range rather than inventing one.",
+  sources: "https://www.guidewire.com/en/about\nhttps://www.guidewire.com/en/products/core-products\nhttps://www.guidewire.com/en/products/technology/insurance-ai-from-guidewire\nhttps://www.guidewire.com/products/technology/guidewire-cloud\nLocal role description: generated/resume_specs/guidewire_software_junior_full_stack_ai_engineer/job_description.txt\nFull prep brief: generated/interview_prep/guidewire_junior_full_stack_ai_engineer.md",
+  checklist: "Read the Guidewire About, Core Products, and Insurance AI pages\nMemorize the one-sentence company explanation\nPractice the 60-second recruiter pitch out loud twice\nGive the why-Guidewire answer without generic praise\nRehearse Lume, ZS AI, job automation, and Sylk stories\nReview Python and Java coding-challenge fundamentals\nPrepare questions for Annie Palathingal\nConfirm coding-challenge format and timeline\nConfirm compensation range since the post did not list one\nReview the brief before the Travis McKlesky round",
+};
+
+const featuredApplications: Application[] = [{
+  id: "featured-guidewire-junior-full-stack-ai-engineer",
+  company: "Guidewire Software",
+  role: "Junior Full-Stack AI Engineer",
+  location: "Bay Area",
+  status: "Preparing",
+  appliedDate: "2026-08-13",
+  followUpDate: "",
+  salaryMin: "",
+  salaryMax: "",
+  source: "Employee referral",
+  link: "",
+  priority: "High",
+  notes: "Referral guidance emphasizes demonstrated company interest and technical strength. Recruiter screen is expected before an online coding challenge and hiring-manager conversation.",
+  nextAction: "Rehearse company-interest and technical-fit answers before recruiter outreach",
+  currentRound: "Recruiter screen preparation",
+  completedRounds: 0,
+  resumePath: "/Users/ashwin/Documents/Job finder/output/pdf/guidewire_software_junior_full_stack_ai_engineer/Chembu_Ashwin.pdf",
+  screeningPrep: guidewireScreeningPrep,
+}];
+
+function mergeFeaturedApplications(applications: Application[]) {
+  const featuredByKey = new Map(featuredApplications.map((item) => [applicationKey(item), item]));
+  const merged = applications.map((item) => {
+    const featured = featuredByKey.get(applicationKey(item));
+    if (!featured) return item;
+    featuredByKey.delete(applicationKey(item));
+    return { ...featured, ...item, screeningPrep: item.screeningPrep || featured.screeningPrep };
+  });
+  return [...merged, ...featuredByKey.values()];
+}
 
 const emptyProgress: ProblemProgress = {
   status: "Not Started",
@@ -711,6 +792,7 @@ function emptyApplication(today: string): Application {
     link: "",
     priority: "High",
     notes: "",
+    screeningPrep: { ...emptyScreeningPrep },
   };
 }
 
@@ -823,10 +905,10 @@ export default function JobHub() {
         const localApplications = storedApplications ? JSON.parse(storedApplications) as Application[] : [];
         const backendApplications = Array.isArray(backend.applications) ? backend.applications as Application[] : [];
         const backendKeys = new Set(backendApplications.map(applicationKey));
-        setApplications([
+        setApplications(mergeFeaturedApplications([
           ...backendApplications,
           ...localApplications.filter((item) => !item.demo && !backendKeys.has(applicationKey(item))),
-        ]);
+        ]));
         const savedProgress = (backend.progress && typeof backend.progress === "object"
           ? backend.progress
           : storedProgress ? JSON.parse(storedProgress) : {}) as Record<string, Partial<ProblemProgress>>;
@@ -837,7 +919,7 @@ export default function JobHub() {
         setSettings({ ...savedSettings, primaryLanguage: normalizeLanguage(savedSettings.primaryLanguage) });
         setSheetSync({ status: "connected", workbook: "Sites database", modifiedAt: backend.updatedAt ?? "", checkedAt: new Date().toISOString(), rowCount: backendApplications.length, message: "Applications and prep are synced across your devices." });
       } catch {
-        setApplications(storedApplications ? JSON.parse(storedApplications) : makeDemoApplications(localToday));
+        setApplications(mergeFeaturedApplications(storedApplications ? JSON.parse(storedApplications) : makeDemoApplications(localToday)));
         if (storedProgress) {
           const savedProgress = JSON.parse(storedProgress) as Record<string, Partial<ProblemProgress>>;
           setProgress(Object.fromEntries(Object.entries(savedProgress).map(([id, item]) => [id, normalizeStoredProgress(item)])));
@@ -967,6 +1049,14 @@ export default function JobHub() {
 
   function openNewApplication() {
     setApplicationDraft(emptyApplication(today));
+  }
+
+  function updateScreeningPrep<K extends keyof CompanyScreeningPrep>(field: K, value: CompanyScreeningPrep[K]) {
+    if (!applicationDraft) return;
+    setApplicationDraft({
+      ...applicationDraft,
+      screeningPrep: { ...(applicationDraft.screeningPrep || emptyScreeningPrep), [field]: value },
+    });
   }
 
   function saveApplication(event: FormEvent) {
@@ -1803,6 +1893,26 @@ export default function JobHub() {
                 <label className="form-wide">Job URL<input type="url" placeholder="https://" value={applicationDraft.link} onChange={(event) => setApplicationDraft({ ...applicationDraft, link: event.target.value })} /></label>
                 <label className="form-wide">Next action / notes<textarea rows={4} value={applicationDraft.notes} onChange={(event) => setApplicationDraft({ ...applicationDraft, notes: event.target.value })} /></label>
               </fieldset>
+              <section className="screening-prep-editor" aria-labelledby="screening-prep-title">
+                <div className="screening-prep-heading">
+                  <div><p className="eyebrow">Company-interest system</p><h3 id="screening-prep-title">Recruiter screening prep</h3><p>Keep research, motivation, proof stories, questions, and interview logistics attached to this application.</p></div>
+                  <label>Status<select disabled={applicationDraft.sheetSynced} value={(applicationDraft.screeningPrep || emptyScreeningPrep).status} onChange={(event) => updateScreeningPrep("status", event.target.value as CompanyScreeningPrep["status"])}><option>Not started</option><option>Researching</option><option>Ready to rehearse</option><option>Rehearsed</option></select></label>
+                </div>
+                <fieldset className="screening-prep-grid" disabled={applicationDraft.sheetSynced}>
+                  <label>Research date<input type="date" value={(applicationDraft.screeningPrep || emptyScreeningPrep).researchedAt} onChange={(event) => updateScreeningPrep("researchedAt", event.target.value)} /></label>
+                  <label className="prep-wide">Company snapshot<textarea rows={4} value={(applicationDraft.screeningPrep || emptyScreeningPrep).companySnapshot} onChange={(event) => updateScreeningPrep("companySnapshot", event.target.value)} placeholder="What the company sells, who it serves, product names, scale, and current strategy" /></label>
+                  <label className="prep-wide">Why this company<textarea rows={5} value={(applicationDraft.screeningPrep || emptyScreeningPrep).whyCompany} onChange={(event) => updateScreeningPrep("whyCompany", event.target.value)} placeholder="Specific, product-grounded motivation" /></label>
+                  <label className="prep-wide">60-second recruiter pitch<textarea rows={5} value={(applicationDraft.screeningPrep || emptyScreeningPrep).recruiterPitch} onChange={(event) => updateScreeningPrep("recruiterPitch", event.target.value)} /></label>
+                  <label className="prep-wide">Role-fit map<textarea rows={5} value={(applicationDraft.screeningPrep || emptyScreeningPrep).roleFit} onChange={(event) => updateScreeningPrep("roleFit", event.target.value)} placeholder="Verified matches plus honest gaps" /></label>
+                  <label className="prep-wide">Technical proof stories<textarea rows={7} value={(applicationDraft.screeningPrep || emptyScreeningPrep).technicalStories} onChange={(event) => updateScreeningPrep("technicalStories", event.target.value)} /></label>
+                  <label className="prep-wide">Likely questions<textarea rows={7} value={(applicationDraft.screeningPrep || emptyScreeningPrep).likelyQuestions} onChange={(event) => updateScreeningPrep("likelyQuestions", event.target.value)} /></label>
+                  <label className="prep-wide">Questions to ask<textarea rows={6} value={(applicationDraft.screeningPrep || emptyScreeningPrep).questionsToAsk} onChange={(event) => updateScreeningPrep("questionsToAsk", event.target.value)} /></label>
+                  <label className="prep-wide">Expected interview process<textarea rows={4} value={(applicationDraft.screeningPrep || emptyScreeningPrep).interviewProcess} onChange={(event) => updateScreeningPrep("interviewProcess", event.target.value)} /></label>
+                  <label className="prep-wide">Risks and truth boundaries<textarea rows={5} value={(applicationDraft.screeningPrep || emptyScreeningPrep).risksAndBoundaries} onChange={(event) => updateScreeningPrep("risksAndBoundaries", event.target.value)} /></label>
+                  <label className="prep-wide">Research sources<textarea rows={5} value={(applicationDraft.screeningPrep || emptyScreeningPrep).sources} onChange={(event) => updateScreeningPrep("sources", event.target.value)} /></label>
+                  <label className="prep-wide">Readiness checklist<textarea rows={9} value={(applicationDraft.screeningPrep || emptyScreeningPrep).checklist} onChange={(event) => updateScreeningPrep("checklist", event.target.value)} /></label>
+                </fieldset>
+              </section>
               <div className="modal-actions">
                 {!applicationDraft.sheetSynced && applicationDraft.id && <button type="button" className="danger-link" onClick={() => deleteApplication(applicationDraft)}>Delete</button>}
                 <span />
