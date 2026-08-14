@@ -45,6 +45,11 @@ textarea {
   font: inherit;
 }
 
+textarea {
+  field-sizing: content;
+  overflow-y: hidden;
+}
+
 button,
 a,
 select {
@@ -2005,7 +2010,7 @@ textarea:focus-visible {
 }
 
 .screening-prep-grid textarea {
-  resize: vertical;
+  resize: none;
   line-height: 1.5;
 }
 
