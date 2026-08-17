@@ -1,0 +1,126 @@
+{
+  "metadata": {
+    "company": "Example Company",
+    "role": "Software Engineer",
+    "slug": "example_company_software_engineer",
+    "official_job_id": "example-job-id",
+    "job_description_source": "https://jobs.example.com/example-job-id",
+    "primary_track": "software product engineering",
+    "secondary_track": "backend and integrations",
+    "facts_reviewed_at": "YYYY-MM-DDTHH:MM:SSZ",
+    "fact_sheet_sha256": "SHA-256 of the private candidate fact sheet",
+    "tailoring_standard_sha256": "SHA-256 of RESUME_TAILORING_STANDARD.md",
+    "required_website": "https://portfolio.example.com",
+    "matched_keywords": ["Example skill"],
+    "emphasis_terms": ["Verified technology", "Verified quantity"],
+    "selection_rationale": "Explain why these entries best match the actual work."
+  },
+  "contact": {
+    "name": "Candidate Name",
+    "phone": "000-000-0000",
+    "email": "candidate@example.com",
+    "location": "City, Region | https://portfolio.example.com"
+  },
+  "profile": "Software engineer focused on the target role's verified requirements.",
+  "skills": [
+    {"label": "Languages", "items": "Verified languages"},
+    {"label": "Frontend", "items": "Verified frontend tools"},
+    {"label": "Backend", "items": "Verified backend tools"}
+  ],
+  "experience": [
+    {
+      "title": "Most Relevant Experience | Organization",
+      "strength": "strong",
+      "date": "Location | Dates",
+      "summary": "Verified scope",
+      "tech": "Verified technologies",
+      "bullets": [
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity."
+      ]
+    },
+    {
+      "title": "Second Relevant Experience | Organization",
+      "strength": "moderate",
+      "date": "Location | Dates",
+      "summary": "Verified scope",
+      "tech": "Verified technologies",
+      "bullets": [
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity."
+      ]
+    },
+    {
+      "title": "Third Relevant Experience | Organization",
+      "strength": "supporting",
+      "date": "Location | Dates",
+      "summary": "Verified scope",
+      "tech": "Verified technologies",
+      "bullets": [
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity."
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "title": "Most Relevant Project",
+      "strength": "strong",
+      "date": "Year",
+      "summary": "Verified scope",
+      "tech": "Verified technologies",
+      "bullets": [
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity."
+      ]
+    },
+    {
+      "title": "Second Relevant Project",
+      "strength": "moderate",
+      "date": "Year",
+      "summary": "Verified scope",
+      "tech": "Verified technologies",
+      "bullets": [
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity."
+      ]
+    },
+    {
+      "title": "Third Relevant Project",
+      "strength": "supporting",
+      "date": "Year",
+      "summary": "Verified scope",
+      "tech": "Verified technologies",
+      "bullets": [
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity.",
+        "Verified evidence with a meaningful quantity."
+      ]
+    }
+  ],
+  "education": {
+    "school": "University Name",
+    "degree": "Degree",
+    "gpa": "",
+    "date": "Location | Graduation date",
+    "coursework": "Verified relevant coursework"
+  },
+  "certifications": [],
+  "publication": "",
+  "links": [
+    "Portfolio: https://portfolio.example.com",
+    "LinkedIn: https://www.linkedin.com/in/candidate",
+    "GitHub: https://github.com/candidate"
+  ]
+}

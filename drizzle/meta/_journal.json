@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1785789283788,
+      "tag": "0000_melodic_mandarin",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786756010652,
+      "tag": "0001_curious_felicia_hardy",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786760489289,
+      "tag": "0002_green_vampiro",
+      "breakpoints": true
+    }
+  ]
+}
