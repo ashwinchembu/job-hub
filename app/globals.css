@@ -2273,6 +2273,39 @@ textarea:focus-visible {
   font-weight: 700;
 }
 
+.journal-sync-indicator {
+  position: fixed;
+  z-index: 101;
+  left: 24px;
+  bottom: 24px;
+  width: min(420px, calc(100vw - 48px));
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #b9d5c8;
+  border-radius: 13px;
+  background: #f4fbf7;
+  color: var(--ink);
+  box-shadow: 0 18px 48px rgba(19, 37, 31, 0.18);
+}
+
+.journal-sync-indicator > span { width: 9px; height: 9px; border-radius: 50%; background: var(--orange); }
+.journal-sync-indicator > div { display: grid; gap: 2px; }
+.journal-sync-indicator strong { font-size: 11px; }
+.journal-sync-indicator small { color: var(--ink-soft); font-size: 10px; line-height: 1.4; }
+.journal-sync-indicator > b { min-width: 25px; padding: 4px 7px; border-radius: 999px; background: white; color: var(--green); font-size: 10px; text-align: center; }
+.journal-sync-indicator.sync-saving > span { animation: sync-pulse 1s ease-in-out infinite; }
+.journal-sync-indicator.sync-saved > span { background: var(--green); }
+.journal-sync-indicator.sync-error { border-color: #e8b1a8; background: #fff5f2; }
+.journal-sync-indicator.sync-error > span { background: var(--red); }
+
+@keyframes sync-pulse {
+  0%, 100% { opacity: .35; transform: scale(.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -2517,6 +2550,10 @@ textarea:focus-visible {
   align-items: center;
   gap: 10px;
   border-top: 1px solid var(--line);
+}
+
+.modal-actions.journal-save-actions {
+  grid-template-columns: minmax(220px, 1fr) auto auto auto;
 }
 
 .journal-callout {
@@ -4708,6 +4745,10 @@ textarea:focus-visible {
   }
 
   .modal-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-actions.journal-save-actions {
     grid-template-columns: 1fr;
   }
 

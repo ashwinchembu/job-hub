@@ -316,6 +316,12 @@ type LocalJournalBackupState = {
   xlsxPath: string;
 };
 
+type JournalSyncState = {
+  status: "idle" | "queued" | "saving" | "saved" | "error";
+  pending: number;
+  message: string;
+};
+
 const APPLICATIONS_KEY = "job-hub:applications:v1";
 const PROGRESS_KEY = "job-hub:problem-progress:v1";
 const SETTINGS_KEY = "job-hub:settings:v1";
@@ -1417,6 +1423,7 @@ export default function JobHub() {
     csvPath: "private-data/job-hub-journals.csv",
     xlsxPath: "private-data/Job_Hub_LeetCode_Journal.xlsx",
   });
+  const [journalSync, setJournalSync] = useState<JournalSyncState>({ status: "idle", pending: 0, message: "" });
   const [agentBaseUrl, setAgentBaseUrl] = useState("");
   const [agentPrivateRoot, setAgentPrivateRoot] = useState(DEFAULT_PRIVATE_ROOT);
   const [agentToken, setAgentToken] = useState("");
@@ -1447,6 +1454,10 @@ export default function JobHub() {
   const localBackupHydratedRef = useRef(false);
   const backendHydratedRef = useRef(false);
   const backendRevisionRef = useRef("");
+  const pendingJournalIdsRef = useRef(new Set<string>());
+  const localJournalQueueRef = useRef(new Map<string, { problem: InterviewProblem; item: ProblemProgress }>());
+  const localJournalQueueTimerRef = useRef<number | null>(null);
+  const localJournalQueueActiveRef = useRef(false);
 
   async function refreshDiscovery() {
     setDiscoveryDashboard((current) => ({ ...current, status: "loading", message: "Refreshing source coverage…" }));
@@ -1533,6 +1544,8 @@ export default function JobHub() {
   useEffect(() => {
     if (!ready || !backendHydratedRef.current) return;
     const timeout = window.setTimeout(async () => {
+      const journalIdsAtStart = new Set(pendingJournalIdsRef.current);
+      if (journalIdsAtStart.size) setJournalSync({ status: "saving", pending: journalIdsAtStart.size, message: `Saving ${journalIdsAtStart.size} question${journalIdsAtStart.size === 1 ? "" : "s"} in the background…` });
       try {
         const response = await fetch("/api/state", {
           method: "PUT",
@@ -1542,25 +1555,44 @@ export default function JobHub() {
         if (response.status === 409) {
           const conflict = await response.json();
           if (Array.isArray(conflict.applications)) setApplications(mergeFeaturedApplications(conflict.applications));
-          if (conflict.progress && typeof conflict.progress === "object") setProgress(conflict.progress);
+          if (conflict.progress && typeof conflict.progress === "object") {
+            const pendingProgress = Object.fromEntries([...pendingJournalIdsRef.current]
+              .filter((id) => progress[id])
+              .map((id) => [id, progress[id]]));
+            setProgress({ ...conflict.progress, ...pendingProgress });
+          }
           if (conflict.settings && typeof conflict.settings === "object") setSettings(conflict.settings);
           backendRevisionRef.current = typeof conflict.updatedAt === "string" ? conflict.updatedAt : backendRevisionRef.current;
           setLiveSyncConnected(true);
           setSheetSync((current) => ({ ...current, status: "connected", checkedAt: new Date().toISOString(), message: "A newer backend update was loaded." }));
+          if (pendingJournalIdsRef.current.size) setJournalSync({ status: "queued", pending: pendingJournalIdsRef.current.size, message: "Newer backend data was merged. Your queued questions are retrying automatically." });
           return;
         }
         if (!response.ok) throw new Error("Backend save failed");
         const saved = await response.json();
         backendRevisionRef.current = typeof saved.updatedAt === "string" ? saved.updatedAt : backendRevisionRef.current;
+        if (journalIdsAtStart.size) {
+          journalIdsAtStart.forEach((id) => pendingJournalIdsRef.current.delete(id));
+          setJournalSync(pendingJournalIdsRef.current.size
+            ? { status: "queued", pending: pendingJournalIdsRef.current.size, message: `${pendingJournalIdsRef.current.size} newer question${pendingJournalIdsRef.current.size === 1 ? " is" : "s are"} still queued.` }
+            : { status: "saved", pending: 0, message: `${journalIdsAtStart.size} question${journalIdsAtStart.size === 1 ? "" : "s"} saved. Keep working.` });
+        }
         setLiveSyncConnected(true);
         setSheetSync((current) => ({ ...current, status: "connected", workbook: "Sites database", checkedAt: new Date().toISOString(), rowCount: applications.length, message: "Applications and prep are synced across your devices." }));
       } catch {
         setLiveSyncConnected(false);
         setSheetSync((current) => ({ ...current, status: "error", message: "Backend sync needs attention; this browser copy is still safe." }));
+        if (pendingJournalIdsRef.current.size) setJournalSync({ status: "error", pending: pendingJournalIdsRef.current.size, message: "Questions remain safely queued in this browser. The next edit will retry the backend." });
       }
     }, BACKEND_SYNC_DELAY_MS);
     return () => window.clearTimeout(timeout);
   }, [applications, progress, ready, settings]);
+
+  useEffect(() => {
+    if (journalSync.status !== "saved") return;
+    const timeout = window.setTimeout(() => setJournalSync({ status: "idle", pending: 0, message: "" }), 2200);
+    return () => window.clearTimeout(timeout);
+  }, [journalSync.status]);
 
   useEffect(() => {
     if (!ready) return;
@@ -1569,6 +1601,10 @@ export default function JobHub() {
 
   useEffect(() => {
     if (!ready || localBackupHydratedRef.current) return;
+    if (!canUseLocalJournalBackup()) {
+      localBackupHydratedRef.current = true;
+      return;
+    }
     const entries = Object.entries(progress).flatMap(([problemId, item]) => {
       const problem = interviewPlan.find((candidate) => String(candidate.id) === problemId);
       return problem ? [{ problem, item }] : [];
@@ -1937,8 +1973,39 @@ export default function JobHub() {
     }
   }
 
+  function canUseLocalJournalBackup() {
+    return ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  }
+
+  async function flushLocalJournalQueue() {
+    if (localJournalQueueActiveRef.current || !localJournalQueueRef.current.size) return;
+    const entries = [...localJournalQueueRef.current.values()];
+    localJournalQueueRef.current.clear();
+    localJournalQueueActiveRef.current = true;
+    try {
+      await backupJournalRowsLocally(entries);
+    } finally {
+      localJournalQueueActiveRef.current = false;
+      if (localJournalQueueRef.current.size) localJournalQueueTimerRef.current = window.setTimeout(() => void flushLocalJournalQueue(), 0);
+    }
+  }
+
+  function queueLocalJournalBackup(problem: InterviewProblem, item: ProblemProgress) {
+    if (!canUseLocalJournalBackup()) return;
+    localJournalQueueRef.current.set(String(problem.id), { problem, item });
+    if (localJournalQueueActiveRef.current) return;
+    if (localJournalQueueTimerRef.current !== null) window.clearTimeout(localJournalQueueTimerRef.current);
+    localJournalQueueTimerRef.current = window.setTimeout(() => void flushLocalJournalQueue(), 450);
+  }
+
   function saveProblemEverywhere(problem: InterviewProblem, item: ProblemProgress) {
-    void backupJournalRowsLocally([{ problem, item }]);
+    pendingJournalIdsRef.current.add(String(problem.id));
+    setJournalSync({
+      status: "queued",
+      pending: pendingJournalIdsRef.current.size,
+      message: `${pendingJournalIdsRef.current.size} question${pendingJournalIdsRef.current.size === 1 ? "" : "s"} queued. You can keep editing or open another question.`,
+    });
+    queueLocalJournalBackup(problem, item);
   }
 
   function backupAllJournalsLocally() {
@@ -1959,6 +2026,7 @@ export default function JobHub() {
       lastAttempt: today,
     };
     setProblemDraft(updatedDraft);
+    saveProblemEverywhere(selectedProblem, updatedDraft);
     setProgress((items) => {
       const saved = normalizeStoredProgress(items[problemKey]);
       if (saved.hintsUsed.includes(hintId)) return items;
@@ -1995,8 +2063,8 @@ export default function JobHub() {
     return payload.hint as string;
   }
 
-  function saveProblemJournal() {
-    if (!selectedProblem) return;
+  function saveCurrentProblem(closeAfterSave: boolean) {
+    if (!selectedProblem) return false;
     const markedAttempted = problemDraft.status === "Not Started";
     const saved: ProblemProgress = {
       ...problemDraft,
@@ -2006,8 +2074,27 @@ export default function JobHub() {
     };
     setProgress((items) => ({ ...items, [String(selectedProblem.id)]: saved }));
     saveProblemEverywhere(selectedProblem, saved);
-    setSelectedProblem(null);
-    showToast(markedAttempted ? "Journal saved · problem marked Attempted" : "Journal saved to the backend");
+    if (closeAfterSave) setSelectedProblem(null);
+    return markedAttempted;
+  }
+
+  function saveProblemJournal() {
+    const markedAttempted = saveCurrentProblem(true);
+    showToast(markedAttempted ? "Journal queued · problem marked Attempted" : "Journal queued · keep working");
+  }
+
+  function saveAndOpenNextProblem() {
+    if (!selectedProblem) return;
+    const currentIndex = interviewPlan.findIndex((problem) => problem.id === selectedProblem.id);
+    const nextProblem = interviewPlan[Math.min(currentIndex + 1, LAST_PLAN_INDEX)];
+    saveCurrentProblem(false);
+    if (nextProblem.id === selectedProblem.id) {
+      setSelectedProblem(null);
+      showToast("Final journal queued");
+      return;
+    }
+    openProblem(nextProblem);
+    showToast("Journal queued · next question opened");
   }
 
   async function evaluateCode() {
@@ -2068,14 +2155,14 @@ export default function JobHub() {
   }
 
   function quickUpdateProblem(problem: InterviewProblem, status: PrepStatus) {
-    setProgress((items) => ({
-      ...items,
-      [String(problem.id)]: {
-        ...(items[String(problem.id)] ?? emptyProgress),
-        status,
-        lastAttempt: status === "Not Started" ? "" : today,
-      },
-    }));
+    const problemKey = String(problem.id);
+    const updated = {
+      ...normalizeStoredProgress(progress[problemKey]),
+      status,
+      lastAttempt: status === "Not Started" ? "" : today,
+    };
+    setProgress((items) => ({ ...items, [problemKey]: updated }));
+    saveProblemEverywhere(problem, updated);
   }
 
   function startTimer(problem: InterviewProblem) {
@@ -2100,21 +2187,20 @@ export default function JobHub() {
       };
       setProblemDraft(updatedDraft);
       setProgress((items) => ({ ...items, [timerKey]: updatedDraft }));
+      saveProblemEverywhere(selectedProblem, updatedDraft);
     } else {
-      setProgress((items) => {
-        const current = normalizeStoredProgress(items[timerKey]);
-        const updatedSeconds = (current.totalSeconds || current.minutes * 60) + timerSeconds;
-        return {
-          ...items,
-          [timerKey]: {
-            ...current,
-            minutes: Math.max(1, Math.ceil(updatedSeconds / 60)),
-            totalSeconds: updatedSeconds,
-            status: current.status === "Not Started" ? "Attempted" : current.status,
-            lastAttempt: today,
-          },
-        };
-      });
+      const current = normalizeStoredProgress(progress[timerKey]);
+      const updatedSeconds = (current.totalSeconds || current.minutes * 60) + timerSeconds;
+      const updated = {
+        ...current,
+        minutes: Math.max(1, Math.ceil(updatedSeconds / 60)),
+        totalSeconds: updatedSeconds,
+        status: current.status === "Not Started" ? "Attempted" as const : current.status,
+        lastAttempt: today,
+      };
+      setProgress((items) => ({ ...items, [timerKey]: updated }));
+      const timerProblem = interviewPlan.find((problem) => String(problem.id) === timerKey);
+      if (timerProblem) saveProblemEverywhere(timerProblem, updated);
     }
     setTimerSeconds(0);
     showToast(`${minutes} practice minute${minutes === 1 ? "" : "s"} saved`);
@@ -3198,6 +3284,7 @@ export default function JobHub() {
 
       <input ref={fileInputRef} className="hidden-input" type="file" accept=".json,.csv,text/csv,application/json" onChange={importFile} />
       {toast && <div className="toast" role="status">{toast}</div>}
+      {journalSync.status !== "idle" && <div className={`journal-sync-indicator sync-${journalSync.status}`} role="status"><span /><div><strong>{journalSync.status === "saving" ? "Saving journals" : journalSync.status === "queued" ? "Journals queued" : journalSync.status === "saved" ? "Journals saved" : "Sync needs attention"}</strong><small>{journalSync.message}</small></div>{journalSync.pending > 0 && <b>{journalSync.pending}</b>}</div>}
 
 
       {selectedProblem && (
@@ -3324,7 +3411,7 @@ export default function JobHub() {
                 </div>
               )}
             </section>
-            <div className="modal-actions"><span /><button className="secondary-button" onClick={() => setSelectedProblem(null)}>Cancel</button><button className="primary-button" onClick={saveProblemJournal}>Save journal</button></div>
+            <div className="modal-actions journal-save-actions"><span className="journal-autosave-note">Autosaves when you leave a field. Saves queue in the background. Open another question immediately.</span><button className="secondary-button" onClick={() => setSelectedProblem(null)}>Close</button><button className="secondary-button" onClick={saveAndOpenNextProblem}>Save &amp; next</button><button className="primary-button" onClick={saveProblemJournal}>Save journal</button></div>
           </section>
         </div>
       )}

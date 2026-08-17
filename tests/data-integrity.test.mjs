@@ -259,6 +259,18 @@ test("journal saves and AI reviews update the private local Excel workbook", () 
   assert.match(localBackupSource, /rowsByKey\.set/);
 });
 
+test("journal saves queue across multiple questions without blocking navigation", () => {
+  assert.match(hubSource, /pendingJournalIdsRef = useRef\(new Set<string>\(\)\)/);
+  assert.match(hubSource, /localJournalQueueRef = useRef\(new Map/);
+  assert.match(hubSource, /Newer backend data was merged\. Your queued questions are retrying automatically\./);
+  assert.match(hubSource, /You can keep editing or open another question/);
+  assert.match(hubSource, /function saveAndOpenNextProblem\(\)/);
+  assert.match(hubSource, /Save &amp; next/);
+  assert.match(hubSource, /Saves queue in the background\. Open another question immediately\./);
+  assert.match(hubSource, /\["localhost", "127\.0\.0\.1"\]\.includes\(window\.location\.hostname\)/);
+  assert.match(hubSource, /className=\{`journal-sync-indicator sync-\$\{journalSync\.status\}`\}/);
+});
+
 test("the live invariant hint asks for a preserved truth", () => {
   assert.match(aiHintSource, /what remains true before and after each iteration/);
 });
