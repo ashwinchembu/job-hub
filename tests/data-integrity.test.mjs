@@ -259,6 +259,17 @@ test("journal saves and AI reviews update the private local Excel workbook", () 
   assert.match(localBackupSource, /rowsByKey\.set/);
 });
 
+test("role gaps separate the missing requirement, evidence bridge, and ramp plan", () => {
+  assert.match(hubSource, /type GapBridge/);
+  assert.match(hubSource, /function gapBridgeDetails/);
+  assert.match(hubSource, /What is missing—and how to bridge it/);
+  assert.match(hubSource, /Exact missing requirement/);
+  assert.match(hubSource, /Transferable evidence/);
+  assert.match(hubSource, /First 30-day move/);
+  assert.match(hubSource, /Ready-to-say gap answer/);
+  assert.match(hubSource, /missing requirements\?/);
+});
+
 test("journal saves queue across multiple questions without blocking navigation", () => {
   assert.match(hubSource, /pendingJournalIdsRef = useRef\(new Set<string>\(\)\)/);
   assert.match(hubSource, /localJournalQueueRef = useRef\(new Map/);

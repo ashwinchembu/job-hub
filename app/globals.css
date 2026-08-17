@@ -3871,6 +3871,24 @@ textarea:focus-visible {
 .evidence-list p { margin: 5px 0 0; color: var(--ink-soft); font-size: 11px; line-height: 1.5; }
 .gap-panel { border-color: #e7c2b7; background: #fff9f6; }
 .gap-panel li { margin-bottom: 10px; color: var(--ink-soft); line-height: 1.5; }
+.gap-clarity-panel { grid-column: 1 / -1; }
+.gap-definition { max-width: 860px; margin: -4px 0 18px; }
+.gap-bridge-list { display: grid; gap: 14px; }
+.gap-bridge-card { overflow: hidden; border: 1px solid #e4b7a9; border-radius: 15px; background: var(--surface); }
+.gap-bridge-card > header { padding: 14px 16px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; border-bottom: 1px solid #ead2ca; background: #fff2ed; }
+.gap-bridge-card > header span,
+.gap-bridge-card > header em { color: #9e4c34; font-size: 9px; font-style: normal; font-weight: 850; letter-spacing: .07em; text-transform: uppercase; }
+.gap-bridge-card > header strong { font-size: 14px; }
+.gap-bridge-card > header em { padding: 5px 7px; border-radius: 99px; background: #f7d9cf; }
+.gap-bridge-grid { padding: 15px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.gap-bridge-grid section { padding: 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); }
+.gap-bridge-grid small,
+.gap-ready-answer small { color: var(--green); font-size: 9px; font-weight: 850; letter-spacing: .05em; text-transform: uppercase; }
+.gap-bridge-grid p { margin: 7px 0 0; color: var(--ink-soft); font-size: 11px; line-height: 1.55; }
+.gap-ready-answer { margin: 0 15px 15px; padding: 15px; border-left: 4px solid var(--orange); border-radius: 0 11px 11px 0; background: #fff8f2; }
+.gap-ready-answer blockquote { margin: 8px 0 11px; font-family: Georgia, serif; font-size: 13px; line-height: 1.65; }
+.gap-ready-answer p { margin: 7px 0 0; color: var(--ink-soft); font-size: 11px; line-height: 1.55; }
+.gap-source-note { margin: 14px 0 0 !important; font-size: 10px; }
 
 .career-workspace-outreach blockquote,
 .compensation-panel blockquote {
@@ -4456,6 +4474,8 @@ textarea:focus-visible {
   .follow-up-draft-grid {
     grid-template-columns: 1fr;
   }
+
+  .gap-bridge-grid { grid-template-columns: 1fr; }
 
   .workspace-hero-stats,
   .dimension-grid {

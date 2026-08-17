@@ -213,6 +213,16 @@ type ApplicationMatch = {
   rationale: string;
 };
 
+type GapBridge = {
+  title: string;
+  boundary: string;
+  transferableEvidence: string;
+  rampPlan: string;
+  recruiterQuestion: string;
+  talkTrack: string;
+  rehearsalReady: boolean;
+};
+
 type SheetSyncState = {
   status: "connecting" | "connected" | "error";
   workbook: string;
@@ -493,7 +503,7 @@ function applicationTrack(application: Application) {
 
 function roleFitGaps(application: Application, text: string) {
   const source = `${application.screeningPrep?.roleFit || ""} ${application.notes}`;
-  const explicit = source.match(/(?:honest gaps|fit gaps(?: recorded)?|no verified)\s*[:—-]?\s*([^.]*(?:\.[^.]*)?)/i)?.[1]
+  const explicit = source.match(/(?:honest gaps|fit gaps(?: recorded)?|missing requirements?|unsupported requirements?|no verified)\s*[:—-]?\s*([^.]*(?:\.[^.]*)?)/i)?.[1]
     ?.replace(/^experience\s*/i, "")
     .trim();
   if (explicit) {
@@ -540,6 +550,65 @@ function calculateApplicationMatch(application: Application): ApplicationMatch {
     matchedCapabilities: capabilities,
     gaps: roleFitGaps(application, text),
     rationale: `${track} fit based on the requirements and role evidence stored in Job Hub, mapped only to verified experience from the candidate fact sheet. ${confidence} confidence; add the complete job description and role-fit notes to improve precision.`,
+  };
+}
+
+function sentence(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const normalized = `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`;
+  return /[.!?]$/.test(normalized) ? normalized : `${normalized}.`;
+}
+
+function gapBridgeDetails(application: Application, gap: string, match: ApplicationMatch): GapBridge {
+  const normalized = gap.toLowerCase();
+  const researchOnly = /full job description|not stored|coverage is incomplete|verify (?:the )?candidate/.test(normalized);
+  const preferredCapability = match.matchedCapabilities.find((capability) => {
+    const evidence = `${capability.label} ${capability.evidence}`.toLowerCase();
+    if (/java|backend|service/.test(normalized)) return /backend|api|service|python|fastapi/.test(evidence);
+    if (/guidewire|insurance|p&c|fintech|payment|banking/.test(normalized)) return /regulated|data|api|integration|testing|stakeholder/.test(evidence);
+    return true;
+  }) || match.matchedCapabilities[0];
+  const transferableEvidence = preferredCapability?.evidence || "Use the strongest verified adjacent evidence in this application package.";
+
+  let title = "Unsupported or unverified requirement";
+  let rampPlan = "Confirm the team’s exact expectation, study the existing implementation, and deliver one small reviewed change with tests before expanding scope.";
+  if (/java/.test(normalized)) {
+    title = "Professional Java depth";
+    rampPlan = "Learn the team’s Java framework and code conventions, trace one existing service end to end, and ship a small reviewed change with focused tests.";
+  } else if (/guidewire|p&c|insurance/.test(normalized)) {
+    title = "Industry platform and domain experience";
+    rampPlan = "Learn one core domain workflow and its data model with an expert, trace it across the product stack, and own a small tested change in that workflow.";
+  } else if (/fintech|payment|banking|card-network/.test(normalized)) {
+    title = "Fintech or payments-domain ownership";
+    rampPlan = "Learn the product’s money movement and risk boundaries, trace one transaction path, and validate a small change against the team’s correctness and audit controls.";
+  } else if (/seniority|senior|staff|principal|lead/.test(normalized)) {
+    title = "Seniority and ownership scope";
+    rampPlan = "Confirm the expected scope, demonstrate depth on one owned system, and use early design and code reviews to prove readiness before taking broader ownership.";
+  } else if (researchOnly) {
+    title = "Role evidence is incomplete";
+    rampPlan = "Add the complete job description and identify the exact unsupported requirement before generating or rehearsing an answer.";
+  }
+
+  const boundary = sentence(gap);
+  const spokenBoundary = /^no\s/i.test(gap.trim())
+    ? sentence(`I do not yet have direct ${gap.trim().replace(/^no\s+(?:prior\s+|verified\s+)?/i, "")}`)
+    : boundary;
+  const recruiterQuestion = researchOnly
+    ? "Which job requirement is actually unsupported or still unverified?"
+    : `For this ${application.role} role, you do not yet have ${title.toLowerCase()}. What transfers, and how would you close that gap?`;
+  const talkTrack = researchOnly
+    ? "Do not rehearse a gap answer yet. Add the complete job description and identify the exact requirement first."
+    : `“That’s a fair concern. ${spokenBoundary} I would not present adjacent experience as direct experience. What does transfer is this: ${sentence(transferableEvidence)} My ramp plan would be concrete: ${sentence(rampPlan)} That gives the team a small, reviewed result early while I build the missing depth.”`;
+
+  return {
+    title,
+    boundary,
+    transferableEvidence: sentence(transferableEvidence),
+    rampPlan: sentence(rampPlan),
+    recruiterQuestion,
+    talkTrack,
+    rehearsalReady: !researchOnly,
   };
 }
 
@@ -2862,6 +2931,7 @@ export default function JobHub() {
       { key: "interviews", label: interviewConfirmed ? `Interviews ${stages.length}` : "Interviews · locked" },
       { key: "edit", label: application.sheetSynced ? "Record" : "Edit" },
     ];
+    const gapBridges = match.gaps.map((gap) => gapBridgeDetails(application, gap, match));
     const careerLabGate = (
       <article className="career-lab-gate">
         <span aria-hidden="true">⌁</span>
@@ -2994,7 +3064,28 @@ export default function JobHub() {
             </section>
             <section className="evidence-grid">
               <article className="workspace-panel"><p className="eyebrow">Matched evidence</p><h2>What supports the fit</h2><div className="evidence-list">{match.matchedCapabilities.map((capability) => <div key={capability.label}><strong>{capability.label}</strong><p>{capability.evidence}</p></div>)}</div></article>
-              <article className="workspace-panel gap-panel"><p className="eyebrow">Truth boundaries</p><h2>Gaps to address honestly</h2><ul>{match.gaps.map((gap) => <li key={gap}>{gap}</li>)}</ul><p>Add the full JD and role-fit map in the Record tab to make this assessment more precise.</p></article>
+              <article className="workspace-panel gap-panel gap-clarity-panel">
+                <p className="eyebrow">Missing requirements</p>
+                <h2>What is missing—and how to bridge it</h2>
+                <p className="gap-definition">A gap means the saved evidence does not directly prove a job requirement. State the boundary plainly, use only adjacent verified evidence, and give a concrete first-month plan.</p>
+                <div className="gap-bridge-list">
+                  {gapBridges.map((gap, index) => (
+                    <article className="gap-bridge-card" key={`${gap.title}-${index}`}>
+                      <header><span>Gap {String(index + 1).padStart(2, "0")}</span><strong>{gap.title}</strong><em>{gap.rehearsalReady ? "Not claimed" : "Needs source"}</em></header>
+                      <div className="gap-bridge-grid">
+                        <section><small>Exact missing requirement</small><p>{gap.boundary}</p></section>
+                        <section><small>Transferable evidence</small><p>{gap.transferableEvidence}</p></section>
+                        <section><small>First 30-day move</small><p>{gap.rampPlan}</p></section>
+                      </div>
+                      <section className="gap-ready-answer">
+                        <small>{gap.rehearsalReady ? "Ready-to-say gap answer" : "Research needed before rehearsal"}</small>
+                        {gap.rehearsalReady ? <><blockquote>{gap.talkTrack}</blockquote><button className="text-button" onClick={() => void copyText(gap.talkTrack, `${gap.title} answer copied`)}>Copy gap answer</button></> : <p>{gap.talkTrack}</p>}
+                      </section>
+                    </article>
+                  ))}
+                </div>
+                <p className="gap-source-note">Add the complete job description and keep the role-fit record current so these boundaries stay role-specific.</p>
+              </article>
             </section>
           </div>
         )}
@@ -3082,7 +3173,7 @@ export default function JobHub() {
                 <label className="prep-wide">Company snapshot<textarea rows={4} value={prep.companySnapshot} onChange={(event) => updateScreeningPrep("companySnapshot", event.target.value)} placeholder="Products, customers, scale, strategy, and current context" /></label>
                 <label className="prep-wide">Why this company<textarea rows={5} value={prep.whyCompany} onChange={(event) => updateScreeningPrep("whyCompany", event.target.value)} placeholder="Specific, product-grounded motivation" /></label>
                 <label className="prep-wide">60-second recruiter pitch<textarea rows={5} value={prep.recruiterPitch} onChange={(event) => updateScreeningPrep("recruiterPitch", event.target.value)} /></label>
-                <label className="prep-wide">Role-fit map<textarea rows={5} value={prep.roleFit} onChange={(event) => updateScreeningPrep("roleFit", event.target.value)} placeholder="Verified matches plus honest gaps" /></label>
+                <label className="prep-wide">Role-fit map<textarea rows={7} value={prep.roleFit} onChange={(event) => updateScreeningPrep("roleFit", event.target.value)} placeholder={'Verified matches: …\nMissing requirements: …\nTransferable evidence: …\nFirst 30-day ramp plan: …'} /></label>
                 <label className="prep-wide">Technical proof stories<textarea rows={7} value={prep.technicalStories} onChange={(event) => updateScreeningPrep("technicalStories", event.target.value)} /></label>
                 <label className="prep-wide">Likely questions<textarea rows={7} value={prep.likelyQuestions} onChange={(event) => updateScreeningPrep("likelyQuestions", event.target.value)} /></label>
                 <label className="prep-wide">Likely interviewer follow-up questions<textarea rows={9} value={prep.followUpQuestions} onChange={(event) => updateScreeningPrep("followUpQuestions", event.target.value)} placeholder="Prepared from the exact role, job description, and verified evidence" /></label>
