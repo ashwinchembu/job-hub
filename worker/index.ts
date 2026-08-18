@@ -49,6 +49,8 @@ type ApplicationActionInput = {
   stableIdempotencyKey?: string;
   artifactPdfSha256?: string;
   uploadedPdfSha256?: string;
+  replacesPackageId?: string;
+  replacementReason?: string;
   reason?: string;
   retryInstruction?: string;
   mailboxSignal?: string;
@@ -309,7 +311,26 @@ function applyApplicationAction(state: JobHubState, input: ApplicationActionInpu
     const previous = index >= 0 ? applications[index] : {};
     const recordedDate = pacificDateFromTimestamp(input.recordedAt);
     const previousApproval = approvalPackageFor(previous);
-    const preserveWorkflowState = index >= 0 && shouldPreserveWorkflowStateForPreparation(previous, previousApproval);
+    const replacesPackageId = String(input.replacesPackageId || "").trim();
+    const replacementReason = String(input.replacementReason || "").trim();
+    const replaceBlockedPackage = Boolean(replacesPackageId)
+      && index >= 0
+      && String(previous.status || "") === "Preparing"
+      && String(previous.workbookStatus || "") === "Blocked"
+      && String(previousApproval?.status || "") === "Blocked"
+      && replacesPackageId === String(previousApproval?.id || "")
+      && approval.id !== replacesPackageId
+      && approval.tier !== "C"
+      && approval.exceptionReasons.length === 0
+      && Boolean(replacementReason)
+      && String(approval.officialJobId || "") === String(previousApproval?.officialJobId || "")
+      && approval.officialJobUrl === String(previousApproval?.officialJobUrl || "")
+      && String(approval.stableIdempotencyKey || "") === String(previousApproval?.stableIdempotencyKey || "")
+      && !previous.appliedDate;
+    if (replacesPackageId && !replaceBlockedPackage) {
+      throw new Error("A blocked package replacement must name the current exact blocked package and preserve the official job and stable idempotency key.");
+    }
+    const preserveWorkflowState = index >= 0 && !replaceBlockedPackage && shouldPreserveWorkflowStateForPreparation(previous, previousApproval);
     const preparedToday = applications.filter((item) => {
       const itemApproval = approvalPackageFor(item);
       return itemApproval && safePacificDateFromTimestamp(itemApproval.preparedAt) === recordedDate && itemApproval.id !== approval.id;
@@ -325,10 +346,6 @@ function applyApplicationAction(state: JobHubState, input: ApplicationActionInpu
     const incomingScreeningPrep = incoming.screeningPrep && typeof incoming.screeningPrep === "object"
       ? incoming.screeningPrep as Record<string, unknown>
       : {};
-    const preservedApprovalStatus = previousApproval?.status
-      || (String(previous.workbookStatus) === "Blocked" ? "Blocked" : "")
-      || (["Applied", "Interviewing", "Offer"].includes(String(previous.status)) ? "Submitted" : "")
-      || (routineAuthorized ? "Validated" : "Pending");
     const next = {
       ...previous,
       ...incoming,
@@ -339,16 +356,20 @@ function applyApplicationAction(state: JobHubState, input: ApplicationActionInpu
       workbookStatus: preserveWorkflowState ? previous.workbookStatus : routineAuthorized ? "Validated for direct submission" : "Exception review required",
       link: String(previous.link || approval.officialJobUrl || input.directUrl || incoming.link || ""),
       nextAction: preserveWorkflowState ? previous.nextAction : routineAuthorized ? "Submit after final live recheck" : "Resolve the exception in Job Hub",
-      notes: preserveWorkflowState ? appendEvidenceNote(previous.notes, String(incoming.notes || "")) : incoming.notes || previous.notes || "",
+      notes: replaceBlockedPackage
+        ? appendEvidenceNote(previous.notes, String(incoming.notes || replacementReason))
+        : preserveWorkflowState ? appendEvidenceNote(previous.notes, String(incoming.notes || "")) : incoming.notes || previous.notes || "",
       screeningPrep: { ...incomingScreeningPrep, ...previousScreeningPrep },
-      approval: {
-        ...approval,
-        ...previousApproval,
-        status: preserveWorkflowState ? preservedApprovalStatus : routineAuthorized ? "Validated" : "Pending",
-        preparedAt: previousApproval?.preparedAt || input.recordedAt,
-        approvedAt: previousApproval?.approvedAt || "",
-        reviewedAt: previousApproval?.reviewedAt || "",
-      },
+      approval: preserveWorkflowState && previousApproval
+        ? previousApproval
+        : {
+            ...previousApproval,
+            ...approval,
+            status: routineAuthorized ? "Validated" : "Pending",
+            preparedAt: input.recordedAt,
+            approvedAt: "",
+            reviewedAt: "",
+          },
       backendActionIds: [...ids],
       sheetSynced: true,
     };

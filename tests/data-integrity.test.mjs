@@ -112,6 +112,13 @@ test("routine applications use exact-package validation and exception-only revie
   assert.match(workerSource, /shouldPreserveWorkflowStateForPreparation/);
   assert.match(workerSource, /\["Pending", "Blocked"\]\.includes\(String\(approval\.status\)\)/);
   assert.match(workerSource, /preserveWorkflowState \? previous\.status : "Preparing"/);
+  assert.match(workerSource, /approval: preserveWorkflowState && previousApproval/);
+  assert.match(workerSource, /\.\.\.previousApproval,\s+\.\.\.approval,/);
+  assert.match(workerSource, /preparedAt: input\.recordedAt/);
+  assert.match(workerSource, /replaceBlockedPackage/);
+  assert.match(workerSource, /replacesPackageId === String\(previousApproval\?\.id \|\| ""\)/);
+  assert.match(workerSource, /approval\.stableIdempotencyKey[\s\S]*previousApproval\?\.stableIdempotencyKey/);
+  assert.match(workerSource, /A blocked package replacement must name the current exact blocked package/);
   assert.doesNotMatch(workerSource, /A completed or advanced application cannot be replaced by a preparation package/);
   assert.match(hubSource, /Routine applications run\. Judgment calls stop here\./);
   assert.match(hubSource, /Exceptions/);
