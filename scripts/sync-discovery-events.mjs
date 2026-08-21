@@ -24,6 +24,17 @@ function parseJsonLines(text) {
 }
 
 function normalizeEvent(event) {
+  if (event.operation === "SOURCE_SCAN_RECORDED" && event.scan) {
+    return {
+      ...event,
+      scan: {
+        ...event.scan,
+        resultsFound: event.scan.resultsFound ?? event.scan.foundCount ?? 0,
+        status: event.scan.status || "completed",
+        note: event.scan.note || event.scan.notes || "",
+      },
+    };
+  }
   if (!["LEAD_UPSERT", "LEAD_STATUS_CHANGED"].includes(event.operation) || !event.lead) return event;
   const status = event.lead.status === "Closed"
     ? "Rejected"

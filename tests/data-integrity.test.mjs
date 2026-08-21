@@ -131,12 +131,16 @@ test("multi-source discovery is persisted, deduplicated, and visible in Job Hub"
   assert.match(workerSource, /LinkedIn/);
   assert.match(workerSource, /Indeed/);
   assert.match(workerSource, /Wellfound/);
+  assert.match(workerSource, /Handshake/);
+  assert.match(workerSource, /latest\.scan\?\.status \|\| "completed"/);
+  assert.match(workerSource, /resultsFound \?\? latest\?\.scan\?\.foundCount/);
   assert.match(hubSource, /function renderSourcing/);
   assert.match(hubSource, /More places in\. Official evidence out\./);
   assert.match(hubSource, /fetch\("\/api\/discovery"/);
   assert.match(discoverySyncSource, /JOB_HUB_SIWC_BYPASS_TOKEN/);
   assert.match(discoverySyncSource, /--event-ids/);
   assert.match(discoverySyncSource, /SOURCE_SCAN_RECORDED/);
+  assert.match(discoverySyncSource, /event\.scan\.resultsFound \?\? event\.scan\.foundCount/);
   assert.match(discoverySyncSource, /lead status is unsupported/);
   assert.match(discoverySyncSource, /event\.lead\.status === "Closed"/);
   assert.match(discoverySyncSource, /event\.lead\.status === "Held"/);

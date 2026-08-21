@@ -72,11 +72,13 @@ type DiscoveryEventInput = {
   scan?: {
     queries?: string[];
     resultsFound?: number;
+    foundCount?: number;
     qualifiedCount?: number;
     duplicateCount?: number;
     rejectedCount?: number;
     status?: "completed" | "partial" | "blocked";
     note?: string;
+    notes?: string;
   };
   run?: {
     runId?: string;
@@ -113,6 +115,7 @@ const discoverySourceRegistry = [
   { key: "yc", name: "Y Combinator", lane: "Startup market", cadence: "Every run", verification: "Company or YC posting required" },
   { key: "built-in-sf", name: "Built In SF", lane: "Bay Area market", cadence: "Every run", verification: "Official employer posting required" },
   { key: "simplify", name: "Simplify", lane: "Early-career market", cadence: "Every run", verification: "Official employer posting required" },
+  { key: "handshake", name: "Handshake", lane: "University and early-career market", cadence: "Every run", verification: "Official employer posting required" },
   { key: "hiring-cafe", name: "HiringCafe", lane: "Broad market", cadence: "Rotating", verification: "Official employer posting required" },
   { key: "hacker-news", name: "Hacker News", lane: "Founder-direct", cadence: "Daily", verification: "Employer-authored post and official company evidence required" },
   { key: "ashby", name: "Ashby", lane: "Official ATS", cadence: "Every run", verification: "Direct posting" },
@@ -543,21 +546,35 @@ async function readDiscoveryDashboard(db: D1Database) {
   const leads: Array<Record<string, unknown>> = leadResult.results.flatMap((row: { payload: string }) => {
     try { return [JSON.parse(row.payload) as Record<string, unknown>]; } catch { return []; }
   });
+  const sourceAliases: Record<string, string> = {
+    "y combinator work at a startup": "yc",
+    "y combinator": "yc",
+    "hacker news who is hiring": "hacker-news",
+    "hacker news": "hacker-news",
+    "built in sf": "built-in-sf",
+    "company careers": "company-careers",
+    "hiringcafe": "hiring-cafe",
+  };
+  const sourceKey = (value: unknown) => {
+    const normalized = String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    return sourceAliases[normalized] || normalized.replace(/\s+/g, "-");
+  };
   const latestScans = new Map<string, DiscoveryEventInput>();
   for (const event of events) {
-    if (event.operation === "SOURCE_SCAN_RECORDED" && event.source && !latestScans.has(event.source)) latestScans.set(event.source, event);
+    const key = sourceKey(event.source);
+    if (event.operation === "SOURCE_SCAN_RECORDED" && key && !latestScans.has(key)) latestScans.set(key, event);
   }
   const sources = discoverySourceRegistry.map((source) => {
-    const latest = latestScans.get(source.name);
+    const latest = latestScans.get(source.key);
     return {
       ...source,
       lastScan: latest?.recordedAt || "",
-      scanStatus: latest?.scan?.status || "not-started",
-      resultsFound: nonnegativeInteger(latest?.scan?.resultsFound),
+      scanStatus: latest ? latest.scan?.status || "completed" : "not-started",
+      resultsFound: nonnegativeInteger(latest?.scan?.resultsFound ?? latest?.scan?.foundCount),
       qualifiedCount: nonnegativeInteger(latest?.scan?.qualifiedCount),
       duplicateCount: nonnegativeInteger(latest?.scan?.duplicateCount),
       rejectedCount: nonnegativeInteger(latest?.scan?.rejectedCount),
-      note: latest?.scan?.note || "",
+      note: latest?.scan?.note || latest?.scan?.notes || "",
     };
   });
   return {
