@@ -36,7 +36,9 @@ Replaces the complete state and requires `baseUpdatedAt` from the latest read. U
 
 ### `POST /api/application-actions`
 
-Supported actions are `PREPARED`, `APPROVED`, `APPROVAL_REJECTED`, `SUBMITTED`, `BLOCKED`, `MAILBOX_CHECKED`, `STATUS_CHANGED`, and `UPSERT`.
+Supported actions are `PREPARED`, `APPROVED`, `APPROVAL_REJECTED`, `REVIEW_INSTRUCTION_RECORDED`, `SUBMITTED`, `BLOCKED`, `MAILBOX_CHECKED`, `STATUS_CHANGED`, `RECRUITER_SIGNAL_RECORDED`, and `UPSERT`.
+
+`REVIEW_INSTRUCTION_RECORDED` saves Ashwin's required `reviewInstruction` against the current exact pending or blocked package without approving it. The package remains blocked until the finder verifies the instruction and, when necessary, creates a new validated replacement package. The Exceptions UI also allows Ashwin to attach a required instruction while explicitly approving the unchanged exact package.
 
 Every request requires:
 
