@@ -1133,6 +1133,18 @@ function mailboxNextCheckLabel(application: Application) {
   return usesDailyMailboxChecks(application) ? "Next mailbox check: tomorrow morning" : "";
 }
 
+function possibleSpamBlock(application: Application) {
+  const notes = application.notes.toLowerCase();
+  const directlyRejected =
+    /flagged the attempt as possible spam/.test(notes) ||
+    /one submit click returned ashby's authoritative[^.]*possible spam/.test(notes);
+  if (directlyRejected) return "rejected" as const;
+  if (/shared ashby[^.]*possible spam/.test(notes) || /affected shared ashby path is paused/.test(notes)) {
+    return "path-paused" as const;
+  }
+  return null;
+}
+
 function recruiterOutreachPlan(application: Application, today: string) {
   if (application.status !== "Applied" || !application.appliedDate) return null;
   const submitted = application.appliedDate.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
@@ -1523,6 +1535,7 @@ export default function JobHub() {
   const localBackupHydratedRef = useRef(false);
   const backendHydratedRef = useRef(false);
   const backendRevisionRef = useRef("");
+  const backendApplicationsRef = useRef<Application[]>([]);
   const pendingJournalIdsRef = useRef(new Set<string>());
   const localJournalQueueRef = useRef(new Map<string, { problem: InterviewProblem; item: ProblemProgress }>());
   const localJournalQueueTimerRef = useRef<number | null>(null);
@@ -1578,6 +1591,7 @@ export default function JobHub() {
         const backend = await response.json();
         if (cancelled) return;
         const backendApplications = Array.isArray(backend.applications) ? backend.applications as Application[] : [];
+        backendApplicationsRef.current = backendApplications;
         setApplications(mergeFeaturedApplications(backendApplications));
         const savedProgress = (backend.progress && typeof backend.progress === "object"
           ? backend.progress
@@ -1619,11 +1633,14 @@ export default function JobHub() {
         const response = await fetch("/api/state", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ applications, progress, settings, baseUpdatedAt: backendRevisionRef.current }),
+          body: JSON.stringify({ applications: backendApplicationsRef.current, progress, settings, baseUpdatedAt: backendRevisionRef.current }),
         });
         if (response.status === 409) {
           const conflict = await response.json();
-          if (Array.isArray(conflict.applications)) setApplications(mergeFeaturedApplications(conflict.applications));
+          if (Array.isArray(conflict.applications)) {
+            backendApplicationsRef.current = conflict.applications as Application[];
+            setApplications(mergeFeaturedApplications(conflict.applications));
+          }
           if (conflict.progress && typeof conflict.progress === "object") {
             const pendingProgress = Object.fromEntries([...pendingJournalIdsRef.current]
               .filter((id) => progress[id])
@@ -1776,6 +1793,38 @@ export default function JobHub() {
     setToast(message);
   }
 
+  async function upsertApplicationThroughBackend(application: Application, successMessage: string) {
+    const recordedAt = new Date().toISOString();
+    const response = await fetch("/api/application-actions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "UPSERT",
+        idempotencyKey: `ui-upsert-${crypto.randomUUID()}`,
+        applicationId: application.id,
+        company: application.company,
+        role: application.role,
+        recordedAt,
+        application,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "The application change could not be saved.");
+    const stateResponse = await fetch("/api/state", { cache: "no-store" });
+    if (!stateResponse.ok) throw new Error("The application saved, but its backend readback could not be verified.");
+    const state = await stateResponse.json();
+    const backendApplications = Array.isArray(state.applications) ? state.applications as Application[] : [];
+    const saved = backendApplications.find((item) => item.id === application.id && item.company === application.company && item.role === application.role);
+    if (!saved) throw new Error("Backend readback did not contain the exact saved application identity.");
+    backendApplicationsRef.current = backendApplications;
+    backendRevisionRef.current = typeof state.updatedAt === "string" ? state.updatedAt : backendRevisionRef.current;
+    setApplications(mergeFeaturedApplications(backendApplications));
+    setApplicationDraft((current) => current?.id === saved.id ? saved : current);
+    setLiveSyncConnected(true);
+    setSheetSync((current) => ({ ...current, status: "connected", checkedAt: new Date().toISOString(), rowCount: backendApplications.length, message: "Application action saved and verified against the backend." }));
+    showToast(successMessage);
+  }
+
   function saveAgentPreferences(baseUrl: string, privateRoot: string) {
     localStorage.setItem(AGENT_PREFERENCES_KEY, JSON.stringify({ baseUrl, privateRoot }));
   }
@@ -1867,6 +1916,7 @@ export default function JobHub() {
       if (!stateResponse.ok) throw new Error("The decision saved, but the refreshed queue could not be loaded.");
       const state = await stateResponse.json();
       const backendApplications = Array.isArray(state.applications) ? state.applications as Application[] : [];
+      backendApplicationsRef.current = backendApplications;
       setApplications(mergeFeaturedApplications(backendApplications));
       backendRevisionRef.current = typeof state.updatedAt === "string" ? state.updatedAt : backendRevisionRef.current;
       setSheetSync((current) => ({ ...current, status: "connected", checkedAt: new Date().toISOString(), rowCount: backendApplications.length, message: "Exception queue synced directly to the Job Hub backend." }));
@@ -1955,9 +2005,7 @@ export default function JobHub() {
         ...application,
         screeningPrep: { ...prep, followUpQuestions, followUpAnswerPlan, followUpDrill: drill },
       };
-      setApplicationDraft(updated);
-      setApplications((items) => items.map((item) => item.id === updated.id ? updated : item));
-      showToast("Live follow-up drill researched and cached");
+      await upsertApplicationThroughBackend(updated, "Live follow-up drill researched, saved, and verified");
     } catch (error) {
       setFollowUpError(error instanceof Error ? error.message : "Live follow-up research could not be completed.");
     } finally {
@@ -1965,28 +2013,22 @@ export default function JobHub() {
     }
   }
 
-  function saveApplication(event: FormEvent) {
+  async function saveApplication(event: FormEvent) {
     event.preventDefault();
     if (!applicationDraft?.company.trim() || !applicationDraft.role.trim()) return;
     const saved = { ...applicationDraft, id: applicationDraft.id || crypto.randomUUID(), demo: false };
-    setApplications((items) => {
-      const exists = items.some((item) => item.id === saved.id);
-      return exists ? items.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...items];
-    });
-    setApplicationDraft(saved);
-    setSelectedApplicationId(saved.id);
-    setApplicationWorkspaceTab("overview");
-    setView("application");
-    showToast(applicationDraft.id ? "Application updated" : "Application added");
+    try {
+      await upsertApplicationThroughBackend(saved, applicationDraft.id ? "Application updated and verified" : "Application added and verified");
+      setSelectedApplicationId(saved.id);
+      setApplicationWorkspaceTab("overview");
+      setView("application");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Application change needs attention");
+    }
   }
 
   function deleteApplication(application: Application) {
-    if (!window.confirm(`Delete ${application.company} — ${application.role}?`)) return;
-    setApplications((items) => items.filter((item) => item.id !== application.id));
-    setApplicationDraft(null);
-    setSelectedApplicationId(null);
-    setView("applications");
-    showToast("Application deleted");
+    showToast(`${application.company} was not deleted · application removal requires a dedicated audited action`);
   }
 
   function openProblem(problem: InterviewProblem) {
@@ -2300,13 +2342,13 @@ export default function JobHub() {
     try {
       if (file.name.toLowerCase().endsWith(".json")) {
         const parsed = JSON.parse(text);
-        if (Array.isArray(parsed.applications)) setApplications(parsed.applications);
+        const skippedApplications = Array.isArray(parsed.applications) ? parsed.applications.length : 0;
         if (parsed.progress && typeof parsed.progress === "object") {
           const importedProgress = parsed.progress as Record<string, Partial<ProblemProgress>>;
           setProgress(Object.fromEntries(Object.entries(importedProgress).map(([id, item]) => [id, normalizeStoredProgress(item)])));
         }
         if (parsed.settings && typeof parsed.settings === "object") setSettings(parsed.settings);
-        showToast("Backup imported");
+        showToast(skippedApplications ? `Prep and settings imported · ${skippedApplications} application records require exact action sync` : "Backup imported");
       } else {
         const rows = parseCSV(text);
         const headers = rows[0].map((header) => header.toLowerCase().replace(/[^a-z0-9]/g, ""));
@@ -2330,8 +2372,7 @@ export default function JobHub() {
           notes: value(row, ["notes", "nextaction"]),
           demo: false,
         })).filter((item) => item.company && item.role);
-        setApplications((items) => [...imported, ...items.filter((item) => !item.demo)]);
-        showToast(`${imported.length} applications imported`);
+        showToast(`${imported.length} application records parsed · exact action sync is required before backend import`);
       }
     } catch {
       showToast("That file could not be imported");
@@ -2348,10 +2389,9 @@ export default function JobHub() {
   }
 
   function clearAll() {
-    if (!window.confirm("Delete all synced Job Hub data from the backend and this browser? Export a backup first if you need one.")) return;
-    setApplications([]);
+    if (!window.confirm("Clear local interview-prep progress? Application records are preserved and require audited actions.")) return;
     setProgress({});
-    showToast("Local data cleared");
+    showToast("Local interview-prep progress cleared · applications preserved");
   }
 
   function moveFocusCarousel(step: -1 | 1) {
@@ -2559,6 +2599,8 @@ export default function JobHub() {
   }
 
   function renderApplications() {
+    const directSpamRejections = applications.filter((application) => possibleSpamBlock(application) === "rejected");
+    const spamPathPaused = applications.filter((application) => possibleSpamBlock(application) === "path-paused");
     const sortButton = (key: ApplicationSortKey, label: string) => {
       const active = applicationSort.key === key;
       return (
@@ -2592,6 +2634,15 @@ export default function JobHub() {
           </button>
         </div>
         {applications.some((item) => item.demo) && <div className="demo-banner"><span><b>Demo records are showing.</b> They are safe placeholders and never leave this browser.</span><button onClick={() => setApplications((items) => items.filter((item) => !item.demo))}>Remove demos</button></div>}
+        {(directSpamRejections.length > 0 || spamPathPaused.length > 0) && (
+          <div className="possible-spam-banner" role="status">
+            <span>
+              <b>{directSpamRejections.length} possible-spam rejection{directSpamRejections.length === 1 ? "" : "s"}</b>
+              <small>{spamPathPaused.length} additional Ashby role{spamPathPaused.length === 1 ? " is" : "s are"} paused without another submission attempt.</small>
+            </span>
+            <button onClick={() => { setApplicationSearch("possible spam"); setStatusFilter("All"); }}>Show affected roles</button>
+          </div>
+        )}
         <section className="toolbar">
           <label className="search-field"><span>⌕</span><input value={applicationSearch} onChange={(event) => setApplicationSearch(event.target.value)} placeholder="Search company, role, location…" /></label>
           <label className="select-field">Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "All" | ApplicationStatus)}><option>All</option>{applicationStatuses.map((status) => <option key={status}>{status}</option>)}</select></label>
@@ -2609,9 +2660,10 @@ export default function JobHub() {
           </div>
           {filteredApplications.map((application) => {
             const match = calculateApplicationMatch(application);
+            const spamBlock = possibleSpamBlock(application);
             return (
-            <article className="application-row" key={application.id}>
-              <div className="company-cell"><strong>{application.company}</strong><span>{application.role}</span><small>{application.location || "Location not set"}{application.sheetSynced ? " · Backend record" : ""}</small></div>
+            <article className={`application-row ${spamBlock ? `application-row-spam-${spamBlock}` : ""}`} key={application.id}>
+              <div className="company-cell"><strong>{application.company}</strong><span>{application.role}</span>{spamBlock && <em className={`spam-block-badge spam-block-${spamBlock}`}>{spamBlock === "rejected" ? "Possible spam rejection" : "Ashby path paused"}</em>}<small>{application.location || "Location not set"}{application.sheetSynced ? " · Backend record" : ""}</small></div>
               <div><span className={`status-pill status-${application.status.toLowerCase()}`}>{application.workbookStatus || application.status}</span><small>{application.currentRound && application.currentRound !== application.workbookStatus ? application.currentRound : ""}</small></div>
               <div><strong>{mailboxNextCheckLabel(application) || application.nextAction || "Not set"}</strong><small>{recruiterOutreachPlan(application, today)?.label || (application.appliedDate ? `${application.workbookStatus === "Prepared" ? "Prepared" : "Dated"} ${formatHumanDate(application.appliedDate)}` : application.latestEmailSubject || application.source || "")}</small></div>
               <div><strong>{application.salaryMin ? `${formatMoney(application.salaryMin)}${application.salaryMax ? `–${formatMoney(application.salaryMax).replace("$", "")}` : "+"}` : "Not listed"}</strong><small>{application.source}</small></div>
@@ -3334,7 +3386,7 @@ export default function JobHub() {
           <article className="data-card"><div className="data-icon">↑</div><div><h2>Import data</h2><p>Restore a Job Hub JSON backup, or import an Applications CSV from your spreadsheet.</p><button className="secondary-button" onClick={() => fileInputRef.current?.click()}>Choose JSON or CSV</button></div></article>
           <article className="data-card"><div className="data-icon">↻</div><div><h2>Backend connection</h2><p>{sheetSync.status === "connected" ? `${sheetSync.rowCount} applications are stored in ${sheetSync.workbook}. ${liveSyncConnected ? "Changes are saving automatically." : "The connection is being restored."}` : sheetSync.message}</p><button className="secondary-button" onClick={() => window.location.reload()}>Refresh from backend</button></div></article>
           <article className="data-card"><div className="data-icon">↺</div><div><h2>Restore demo</h2><p>Bring back three clearly labeled sample applications and reset the coding plan.</p><button className="secondary-button" onClick={resetDemo}>Restore demo data</button></div></article>
-          <article className="data-card danger-card"><div className="data-icon">×</div><div><h2>Clear synced data</h2><p>Remove all applications and prep journals from the private backend and this browser. This cannot be undone.</p><button className="danger-button" onClick={clearAll}>Clear everything</button></div></article>
+          <article className="data-card danger-card"><div className="data-icon">×</div><div><h2>Clear prep progress</h2><p>Clear local interview-prep progress while preserving application records and their audited history.</p><button className="danger-button" onClick={clearAll}>Clear prep progress</button></div></article>
         </section>
         <section className="import-guide"><p className="eyebrow">CSV import columns</p><h2>Works with a simple application export.</h2><p>Job Hub recognizes columns such as <code>Company</code>, <code>Role</code>, <code>Location</code>, <code>Status</code>, <code>Application Date</code>, <code>Min Base</code>, <code>Max Base</code>, <code>Source</code>, <code>Job URL</code>, and <code>Notes</code>.</p></section>
       </>

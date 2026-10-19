@@ -36,9 +36,7 @@ Replaces the complete state and requires `baseUpdatedAt` from the latest read. U
 
 ### `POST /api/application-actions`
 
-Supported actions are `PREPARED`, `APPROVED`, `APPROVAL_REJECTED`, `REVIEW_INSTRUCTION_RECORDED`, `SUBMITTED`, `BLOCKED`, `MAILBOX_CHECKED`, `STATUS_CHANGED`, `RECRUITER_SIGNAL_RECORDED`, and `UPSERT`.
-
-`REVIEW_INSTRUCTION_RECORDED` saves Ashwin's required `reviewInstruction` against the current exact pending or blocked package without approving it. The package remains blocked until the finder verifies the instruction and, when necessary, creates a new validated replacement package. The Exceptions UI also allows Ashwin to attach a required instruction while explicitly approving the unchanged exact package.
+Supported actions are `PREPARED`, `APPROVED`, `APPROVAL_REJECTED`, `SUBMITTED`, `BLOCKED`, `MAILBOX_CHECKED`, `STATUS_CHANGED`, and `UPSERT`.
 
 Every request requires:
 
@@ -46,7 +44,9 @@ Every request requires:
 - `action` or `operation`;
 - a timezone-aware `recordedAt`.
 
-Retries with the same action ID return `duplicate: true`. Preparation and submission actions enforce the exact package, immutable artifact path, resume/upload SHA-256, validation, confirmation, and exception state stored by the backend.
+Retries with the same action ID return `duplicate: true`. Preparation and submission actions enforce the exact package, immutable artifact path, resume/upload SHA-256, validation, confirmation, and exception state stored by the backend. Any newly received Tier A/B `PREPARED` or `SUBMITTED` mutation on or after the V5 cutover (`2026-09-04T00:50:00Z`) must carry V5 artifact proof; backdating `recordedAt` does not bypass this receipt-time gate. The preparation sync client verifies every declared artifact file hash and derives `approval.tailoringVersion: 5`, a finite integer `approval.artifactManifestSchemaVersion` of at least `2`, `approval.artifactManifestSha256`, `approval.resumeSpecSha256`, and `approval.artifactPreparedAt` from the immutable artifact. Existing pre-cutover records remain readable, and an exact retry of an already-recorded action ID remains an idempotent duplicate; a new action ID cannot mutate legacy V4 state.
+
+The authenticated preparation sync client is the trust root for local artifact inspection: the hosted Worker cannot read the caller's filesystem and therefore cannot independently attest that a hash came from a real local file. The client now binds the exact package ID, company, role, official job ID/URL, stable application key, resume hash, manifest/spec/application-answer hashes, schema, tailoring version, and preparation time into one SHA-256 proof. The Worker recomputes that binding, recomputes the stable application key, rejects future-dated proof, and accepts `duplicate: true` only for the same stored operation and semantically identical payload. These are strong consistency and anti-substitution checks, not a signature; anyone holding the runtime authorization token can still forge a self-consistent proof. Keep that token restricted and create Tier A/B `PREPARED` actions only through `scripts/sync-prepared-applications.mjs`.
 
 Example non-submission action:
 

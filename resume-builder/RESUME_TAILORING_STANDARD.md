@@ -19,6 +19,12 @@ This public standard is candidate-neutral. Keep the real candidate fact sheet, c
 - Record why every retained entry and bullet was selected.
 - Tailor the profile, skills, entry ordering, project ordering, and body evidence. Reordering an identical complete bullet set is not sufficient tailoring.
 
+## Versioned validation
+
+- Version 3 introduced body-level tailoring: material body changes, role-specific rendered bullets, unsupported-requirement disclosure, target matches, selection reasons, and section-local priorities.
+- Version 4 added complete job analysis, ranked evidence, exactly one structured evidence audit per rendered bullet, meaningful quantity categories, duplicate-sentence rejection, and cross-job body comparison. An identical body fails, and reuse greater than 80% requires a written materially-identical-requirements justification.
+- Version 5 inherits every v3 and v4 gate and requires an explicit shared bullet point size from 9.00 through 10.00 plus direct applicant prose. The current command-line build path accepts exactly version 5; historical v3/v4 specifications remain readable for audit only.
+
 ## Accuracy and attribution
 
 - Never invent technologies, ownership, production scale, deployment status, customer identity, domain experience, metrics, or outcomes.
@@ -30,6 +36,9 @@ This public standard is candidate-neutral. Keep the real candidate fact sheet, c
 
 - Default to one readable page unless the candidate explicitly requests otherwise.
 - Use ATS-readable body text and standard section headings.
+- Use one configured point size for every Experience and Projects bullet. Bold changes weight only, never size, and no individual bullet may be shrunk or enlarged to fit.
+- Let bullets wrap naturally to one or two lines. If a bullet exceeds two lines, shorten the accomplishment instead of reducing its font size or adding forced line-fill language.
+- Write every bullet as a direct, cohesive achievement. Keep provenance and claim boundaries in private notes; never append audit narration such as `This supports...`, `This demonstrates...`, `without claiming...`, or ownership-boundary language, and never expose internal labels such as `source:`, `evidence:`, or `quantity_source:`.
 - Render the PDF and visually inspect every page.
 - Extract ATS text and verify all required contact evidence, dates, skills, and sections.
 - Reject clipped text, overlapping elements, unreadably small text, empty pages, and unsupported claims.

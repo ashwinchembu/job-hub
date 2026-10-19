@@ -11,9 +11,50 @@
     "fact_sheet_sha256": "SHA-256 of the private candidate fact sheet",
     "tailoring_standard_sha256": "SHA-256 of RESUME_TAILORING_STANDARD.md",
     "required_website": "https://portfolio.example.com",
-    "matched_keywords": ["Example skill"],
-    "emphasis_terms": ["Verified technology", "Verified quantity"],
-    "selection_rationale": "Explain why these entries best match the actual work."
+    "matched_keywords": ["Example skill one", "Example skill two", "Example skill three"],
+    "emphasis_terms": ["Verified technology", "Verified quantity", "Verified mechanism"],
+    "uniform_bullet_font_size": 9.1,
+    "selection_rationale": "Explain why these entries best match the actual work.",
+    "tailoring_version": 5,
+    "body_tailoring_summary": "Describe the material evidence, entry, bullet, and ordering decisions made for this exact role.",
+    "omitted_requirements": [
+      "Important unsupported requirement, or a reviewed none-applicable statement"
+    ],
+    "job_analysis": {
+      "responsibilities": ["Responsibility from the complete job description"],
+      "repeated_keywords": ["keyword one", "keyword two", "keyword three"],
+      "hard_requirements": ["Hard requirement from the complete job description"],
+      "preferred_requirements": ["Preferred requirement from the complete job description"],
+      "domain": "Role domain",
+      "seniority": "Role seniority"
+    },
+    "evidence_ranking": [
+      {"entry": "Experience one", "type": "experience", "rank": 1, "role_work_match": "Why the actual work matches", "selected": true},
+      {"entry": "Experience two", "type": "experience", "rank": 2, "role_work_match": "Why the actual work matches", "selected": true},
+      {"entry": "Experience three", "type": "experience", "rank": 3, "role_work_match": "Why the actual work matches", "selected": true},
+      {"entry": "Project one", "type": "project", "rank": 4, "role_work_match": "Why the actual work matches", "selected": true},
+      {"entry": "Project two", "type": "project", "rank": 5, "role_work_match": "Why the actual work matches", "selected": true},
+      {"entry": "Project three", "type": "project", "rank": 6, "role_work_match": "Why the actual work matches", "selected": true}
+    ],
+    "role_specific_bullets": [
+      "Copy at least seven materially role-specific rendered bullets here."
+    ],
+    "bullet_evidence_audit": [
+      {
+        "bullet": "Exact rendered bullet with a verified quantity.",
+        "target_responsibility": "Job responsibility supported",
+        "selected_fact_sheet_evidence": "Exact private fact-sheet heading or evidence reference",
+        "selection_reason": "Why this fact is stronger than the alternatives for this job",
+        "problem": "Verified problem or user need",
+        "mechanism": "Verified technology and its exact role",
+        "implementation": "Verified implementation or data flow",
+        "outcome": "Verified outcome or artifact",
+        "quantity": "Exact quantity appearing in the bullet",
+        "quantity_source": "Private fact-sheet or selection-note evidence for the quantity",
+        "quantity_category": "records"
+      }
+    ],
+    "reuse_justifications": []
   },
   "contact": {
     "name": "Candidate Name",
@@ -31,6 +72,9 @@
     {
       "title": "Most Relevant Experience | Organization",
       "strength": "strong",
+      "target_matches": ["Responsibility one", "Responsibility two"],
+      "selection_reason": "Why this is the strongest experience for the target work.",
+      "entry_priority": 1,
       "date": "Location | Dates",
       "summary": "Verified scope",
       "tech": "Verified technologies",
@@ -45,6 +89,9 @@
     {
       "title": "Second Relevant Experience | Organization",
       "strength": "moderate",
+      "target_matches": ["Responsibility one", "Responsibility two"],
+      "selection_reason": "Why this experience is retained for the target work.",
+      "entry_priority": 2,
       "date": "Location | Dates",
       "summary": "Verified scope",
       "tech": "Verified technologies",
@@ -58,6 +105,9 @@
     {
       "title": "Third Relevant Experience | Organization",
       "strength": "supporting",
+      "target_matches": ["Responsibility one", "Responsibility two"],
+      "selection_reason": "Why this experience adds distinct target evidence.",
+      "entry_priority": 3,
       "date": "Location | Dates",
       "summary": "Verified scope",
       "tech": "Verified technologies",
@@ -72,6 +122,9 @@
     {
       "title": "Most Relevant Project",
       "strength": "strong",
+      "target_matches": ["Responsibility one", "Responsibility two"],
+      "selection_reason": "Why this is the strongest project for the target work.",
+      "entry_priority": 1,
       "date": "Year",
       "summary": "Verified scope",
       "tech": "Verified technologies",
@@ -86,6 +139,9 @@
     {
       "title": "Second Relevant Project",
       "strength": "moderate",
+      "target_matches": ["Responsibility one", "Responsibility two"],
+      "selection_reason": "Why this project is retained for the target work.",
+      "entry_priority": 2,
       "date": "Year",
       "summary": "Verified scope",
       "tech": "Verified technologies",
@@ -99,6 +155,9 @@
     {
       "title": "Third Relevant Project",
       "strength": "supporting",
+      "target_matches": ["Responsibility one", "Responsibility two"],
+      "selection_reason": "Why this project adds distinct target evidence.",
+      "entry_priority": 3,
       "date": "Year",
       "summary": "Verified scope",
       "tech": "Verified technologies",

@@ -49,6 +49,8 @@ type ApplicationActionInput = {
   stableIdempotencyKey?: string;
   artifactPdfSha256?: string;
   uploadedPdfSha256?: string;
+  replacesPackageId?: string;
+  replacementReason?: string;
   reason?: string;
   retryInstruction?: string;
   mailboxSignal?: string;
@@ -129,8 +131,13 @@ const discoverySourceRegistry = [
 
 const jsonHeaders = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 const validApplicationStatuses = new Set(["Saved", "Preparing", "Applied", "Interviewing", "Offer", "Rejected", "Closed"]);
+const submissionStatuses = new Set(["Applied", "Interviewing", "Offer"]);
 const validApprovalTiers = new Set(["A", "B", "C"]);
 const validApprovalStatuses = new Set(["Validated", "Pending", "Approved", "Rejected", "Submitted", "Blocked"]);
+const CURRENT_TAILORING_VERSION = 5;
+const CURRENT_ARTIFACT_MANIFEST_SCHEMA_VERSION = 2;
+const V5_CUTOVER_AT = Date.parse("2026-09-04T00:50:00.000Z");
+const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
 const routineValidationFields = [
   "qualificationChecksPassed",
   "factualChecksPassed",
@@ -163,6 +170,21 @@ function isStrictDate(value: unknown): value is string {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
+function requireEstablishedSubmissionForStatus(current: Record<string, unknown>, nextStatus: unknown, action: string) {
+  if (!submissionStatuses.has(String(nextStatus || ""))) return;
+  const currentStatus = String(current.status || "");
+  if (submissionStatuses.has(currentStatus)) return;
+  throw new Error(`${action} cannot establish Applied, Interviewing, or Offer status; record the authoritative SUBMITTED action first.`);
+}
+
+function requireActionNotFutureDated(recordedAt: unknown, receivedAt: string) {
+  const recordedTime = new Date(String(recordedAt)).getTime();
+  const receivedTime = new Date(receivedAt).getTime();
+  if (!Number.isFinite(recordedTime) || recordedTime > receivedTime + 5 * 60 * 1000) {
+    throw new Error("recordedAt cannot be materially later than server receipt.");
+  }
+}
+
 function pacificDateFromTimestamp(value: unknown) {
   if (typeof value !== "string" || !/(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
     throw new Error("recordedAt must be an ISO timestamp with an explicit timezone.");
@@ -190,18 +212,160 @@ function appendEvidenceNote(existing: unknown, evidence: string) {
 }
 
 function applicationIndexFor(applications: Array<Record<string, unknown>>, input: ApplicationActionInput) {
-  if (input.applicationId) {
-    const byId = applications.findIndex((item) => item.id === input.applicationId);
-    if (byId >= 0) return byId;
-  }
+  if (input.applicationId) return applications.findIndex((item) => item.id === input.applicationId);
   const key = normalizedApplicationKey(input.company, input.role);
   return applications.findIndex((item) => normalizedApplicationKey(item.company, item.role) === key);
+}
+
+function requireMatchingApplicationIdentity(application: Record<string, unknown>, company: unknown, role: unknown) {
+  const expectedCompany = String(company || "").trim();
+  const expectedRole = String(role || "").trim();
+  if (!expectedCompany || !expectedRole
+      || normalizedApplicationKey(application.company, application.role) !== normalizedApplicationKey(expectedCompany, expectedRole)) {
+    throw new Error("The application ID does not match the supplied company and role identity.");
+  }
+}
+
+function requireMonotonicApprovalAction(recordedAt: unknown, approval: Record<string, unknown> | null, action: unknown) {
+  if (!approval) return;
+  const actionTime = new Date(String(recordedAt || "")).getTime();
+  const priorTimes = ["preparedAt", "approvedAt", "reviewedAt", "blockedAt", "submittedAt"]
+    .map((field) => new Date(String(approval[field] || "")).getTime())
+    .filter(Number.isFinite);
+  priorTimes.push(
+    ...[approval.reviewInstructionAt, ...(Array.isArray(approval.reviewInstructions)
+      ? approval.reviewInstructions.map((item) => item && typeof item === "object" ? (item as Record<string, unknown>).recordedAt : "")
+      : [])]
+      .map((value) => new Date(String(value || "")).getTime())
+      .filter(Number.isFinite),
+  );
+  if (priorTimes.length && actionTime < Math.max(...priorTimes)) {
+    throw new Error(`${String(action || "Application action")} recordedAt cannot precede the current package workflow history.`);
+  }
 }
 
 function approvalPackageFor(application: Record<string, unknown>) {
   return application.approval && typeof application.approval === "object"
     ? application.approval as Record<string, unknown>
     : null;
+}
+
+function requiresV5Mutation(receivedAt: string) {
+  return new Date(receivedAt).getTime() >= V5_CUTOVER_AT;
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(",")}}`;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function nextRevisionTimestamp(currentUpdatedAt: string, wallClockTimestamp = new Date().toISOString()) {
+  const currentMillis = Date.parse(currentUpdatedAt);
+  const wallClockMillis = Date.parse(wallClockTimestamp);
+  const nextMillis = Math.max(
+    Number.isFinite(wallClockMillis) ? wallClockMillis : Date.now(),
+    Number.isFinite(currentMillis) ? currentMillis + 1 : 0,
+  );
+  return new Date(nextMillis).toISOString();
+}
+
+async function sha256Text(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function normalizedStableKeyPart(value: unknown) {
+  return String(value).normalize("NFKC").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+async function validateV5ApprovalForMutation(
+  approval: Record<string, unknown>,
+  action: "PREPARED" | "SUBMITTED",
+  receivedAt: string,
+  company: string,
+  role: string,
+  actionRecordedAt: string,
+) {
+  if (!requiresV5Mutation(receivedAt)) return;
+  if (!Number.isInteger(approval.tailoringVersion) || approval.tailoringVersion !== CURRENT_TAILORING_VERSION) {
+    throw new Error(`${action} received after the V5 cutover requires tailoringVersion ${CURRENT_TAILORING_VERSION}.`);
+  }
+  const schemaVersion = approval.artifactManifestSchemaVersion;
+  if (!Number.isInteger(schemaVersion) || !Number.isFinite(schemaVersion) || Number(schemaVersion) < CURRENT_ARTIFACT_MANIFEST_SCHEMA_VERSION) {
+    throw new Error(`${action} received after the V5 cutover requires a finite integer artifactManifestSchemaVersion ${CURRENT_ARTIFACT_MANIFEST_SCHEMA_VERSION} or newer.`);
+  }
+  const manifestHash = String(approval.artifactManifestSha256 || "");
+  const specHash = String(approval.resumeSpecSha256 || "");
+  const answersHash = String(approval.applicationAnswersSha256 || "");
+  const atsTextHash = String(approval.atsTextSha256 || "");
+  const renderedPageHash = String(approval.renderedPageSha256 || "");
+  const factSheetHash = String(approval.factSheetSha256 || "");
+  const tailoringStandardHash = String(approval.tailoringStandardSha256 || "");
+  const pdfTextHash = String(approval.pdfTextSha256 || "");
+  const bindingHash = String(approval.artifactProofBindingSha256 || "");
+  if (![manifestHash, specHash, answersHash, atsTextHash, renderedPageHash, factSheetHash, tailoringStandardHash, pdfTextHash, bindingHash].every((value) => SHA256_PATTERN.test(value) && value === value.toLowerCase())) {
+    throw new Error(`${action} received after the V5 cutover requires canonical lower-case manifest, spec, answers, ATS, render, source-fingerprint, PDF-text, and proof-binding SHA-256 values.`);
+  }
+  const artifactPreparedAt = approval.artifactPreparedAt;
+  if (typeof artifactPreparedAt !== "string" || !/(?:Z|[+-]\d{2}:\d{2})$/.test(artifactPreparedAt) || Number.isNaN(new Date(artifactPreparedAt).getTime())) {
+    throw new Error(`${action} received after the V5 cutover requires the inspected artifact preparedAt timestamp.`);
+  }
+  if (new Date(artifactPreparedAt).getTime() > new Date(actionRecordedAt).getTime()
+      || new Date(artifactPreparedAt).getTime() > new Date(receivedAt).getTime() + 5 * 60 * 1000) {
+    throw new Error(`${action} artifactPreparedAt cannot be later than its recorded action or materially later than server receipt.`);
+  }
+  const officialJobId = String(approval.officialJobId || "").trim();
+  const officialJobUrl = String(approval.officialJobUrl || "").trim();
+  const packageId = String(approval.id || "").trim();
+  const stableKey = String(approval.stableIdempotencyKey || "").trim();
+  const resumeHash = String(approval.resumeSha256 || "").trim();
+  if (!packageId || !company || !role || !officialJobId || !SHA256_PATTERN.test(resumeHash) || resumeHash !== resumeHash.toLowerCase()) {
+    throw new Error(`${action} V5 artifact proof requires canonical package, company, role, official-job, and resume identity fields.`);
+  }
+  try {
+    const url = new URL(officialJobUrl);
+    if (!/^https?:$/.test(url.protocol)) throw new Error();
+  } catch {
+    throw new Error(`${action} V5 artifact proof requires a valid officialJobUrl.`);
+  }
+  const stableInput = [company, role, officialJobId].map(normalizedStableKeyPart).join("|");
+  const expectedStableKey = `jobapp-${await sha256Text(stableInput)}`;
+  if (stableKey !== expectedStableKey) {
+    throw new Error(`${action} stableIdempotencyKey is not bound to the exact company, role, and officialJobId.`);
+  }
+  if (approval.artifactProofSource !== "authenticated-preparation-sync-v1") {
+    throw new Error(`${action} V5 artifact proof must identify the authenticated preparation sync client as its inspection source.`);
+  }
+  const bindingInput = [
+    "job-hub-v5-artifact-proof-v1",
+    packageId,
+    company,
+    role,
+    officialJobId,
+    officialJobUrl,
+    stableKey,
+    resumeHash,
+    String(approval.tailoringVersion),
+    String(schemaVersion),
+    manifestHash,
+    specHash,
+    answersHash,
+    atsTextHash,
+    renderedPageHash,
+    factSheetHash,
+    tailoringStandardHash,
+    pdfTextHash,
+    artifactPreparedAt,
+  ].join("\n");
+  if (bindingHash !== await sha256Text(bindingInput)) {
+    throw new Error(`${action} V5 artifact proof binding does not match the exact package identity and inspected hashes.`);
+  }
 }
 
 function shouldPreserveWorkflowStateForPreparation(application: Record<string, unknown>, approval: Record<string, unknown> | null) {
@@ -220,6 +384,10 @@ function validatePreparationPackage(input: ApplicationActionInput) {
   const tier = String(approval?.tier || "").trim();
   if (!approval || !packageId || !validApprovalTiers.has(tier)) {
     throw new Error("PREPARED requires a stable packageId and Tier A, B, or C approval package.");
+  }
+  const approvalPackageId = String(approval.id || "").trim();
+  if (input.packageId && approvalPackageId && String(input.packageId).trim() !== approvalPackageId) {
+    throw new Error("PREPARED packageId must match approvalPackage.id exactly.");
   }
   if (!Array.isArray(approval.requirements) || !Array.isArray(approval.gaps) || !Array.isArray(approval.answers)) {
     throw new Error("The approval card requires requirements, gaps, and application answers arrays.");
@@ -247,19 +415,24 @@ function validatePreparationPackage(input: ApplicationActionInput) {
   const validation = approval.validation && typeof approval.validation === "object"
     ? approval.validation as Record<string, unknown>
     : {};
-  const exceptionReasons = Array.isArray(approval.exceptionReasons)
-    ? approval.exceptionReasons.map((value) => String(value).trim()).filter(Boolean)
-    : [];
+  if (!Array.isArray(approval.exceptionReasons)
+      || !approval.exceptionReasons.every((value) => typeof value === "string" && value.trim().length >= 8)) {
+    throw new Error("exceptionReasons must be an array of specific non-empty text reasons.");
+  }
+  const exceptionReasons = approval.exceptionReasons.map((value) => value.trim());
   if (tier !== "C" && !routineValidationFields.every((field) => validation[field] === true)) {
     throw new Error("Tier A and B packages require every routine qualification, factual, ATS, rendering, duplicate, answer, immutable-artifact, and live-posting validation to pass.");
   }
   if (tier === "C" && exceptionReasons.length === 0) {
     throw new Error("Tier C requires at least one genuine exception reason.");
   }
+  if (tier !== "C" && exceptionReasons.length > 0) {
+    throw new Error("Tier A and B packages cannot carry unresolved exception reasons.");
+  }
   return { ...approval, id: packageId, tier, officialJobUrl, validation, exceptionReasons };
 }
 
-function applyApplicationAction(state: JobHubState, input: ApplicationActionInput, actionId: string) {
+async function applyApplicationAction(state: JobHubState, input: ApplicationActionInput, actionId: string, receivedAt: string) {
   const action = input.action || input.operation;
   const applications = state.applications.map((item) => ({ ...item }));
 
@@ -276,19 +449,31 @@ function applyApplicationAction(state: JobHubState, input: ApplicationActionInpu
         throw new Error("Submitted applications require a truthful appliedDate no later than recordedAt.");
       }
     }
+    const explicitApplicationId = String(input.applicationId || "").trim();
+    const incomingApplicationId = typeof incoming.id === "string" ? incoming.id.trim() : "";
+    if (explicitApplicationId && incomingApplicationId && explicitApplicationId !== incomingApplicationId) {
+      throw new Error("UPSERT applicationId conflicts with application.id.");
+    }
+    const suppliedApplicationId = explicitApplicationId || incomingApplicationId;
     const index = applicationIndexFor(applications, {
-      applicationId: typeof incoming.id === "string" ? incoming.id : undefined,
+      applicationId: suppliedApplicationId || undefined,
       company,
       role,
     });
+    if (index < 0 && suppliedApplicationId
+        && applicationIndexFor(applications, { company, role }) >= 0) {
+      throw new Error("UPSERT supplied an unknown application ID for an existing company and role identity.");
+    }
+    if (index >= 0) requireMatchingApplicationIdentity(applications[index], company, role);
     const previous = index >= 0 ? applications[index] : {};
+    requireEstablishedSubmissionForStatus(previous, status, "UPSERT");
     const ids = new Set(Array.isArray(previous.backendActionIds) ? previous.backendActionIds.filter((id): id is string => typeof id === "string") : []);
     ids.add(actionId);
-    const { approval: _ignoredApproval, ...safeIncoming } = incoming;
+    const { id: _ignoredIncomingId, approval: _ignoredApproval, appliedDate: _ignoredAppliedDate, backendActionIds: _ignoredActionIds, sheetSynced: _ignoredSheetSynced, ...safeIncoming } = incoming;
     const next = {
       ...previous,
       ...safeIncoming,
-      id: typeof incoming.id === "string" && incoming.id.trim() ? incoming.id : previous.id || `backend-${normalizedApplicationKey(company, role).replace(/[^a-z0-9]+/g, "-")}`,
+      id: String(previous.id || suppliedApplicationId || `backend-${normalizedApplicationKey(company, role).replace(/[^a-z0-9]+/g, "-")}`),
       company,
       role,
       status,
@@ -308,11 +493,50 @@ function applyApplicationAction(state: JobHubState, input: ApplicationActionInpu
     const company = String(input.company || incoming.company || "").trim();
     const role = String(input.role || incoming.role || "").trim();
     if (!company || !role) throw new Error("PREPARED requires company and role.");
-    let index = applicationIndexFor(applications, { applicationId: input.applicationId || String(incoming.id || ""), company, role });
+    if (approval.tier !== "C") await validateV5ApprovalForMutation(approval, "PREPARED", receivedAt, company, role, input.recordedAt || "");
+    const explicitApplicationId = String(input.applicationId || "").trim();
+    const incomingApplicationId = String(incoming.id || "").trim();
+    if (explicitApplicationId && incomingApplicationId && explicitApplicationId !== incomingApplicationId) {
+      throw new Error("PREPARED applicationId conflicts with application.id.");
+    }
+    const suppliedApplicationId = explicitApplicationId || incomingApplicationId;
+    let index = applicationIndexFor(applications, { applicationId: suppliedApplicationId || undefined, company, role });
+    if (index < 0 && suppliedApplicationId
+        && applicationIndexFor(applications, { company, role }) >= 0) {
+      throw new Error("PREPARED supplied an unknown application ID for an existing company and role identity.");
+    }
+    if (index >= 0) requireMatchingApplicationIdentity(applications[index], company, role);
     const previous = index >= 0 ? applications[index] : {};
-    const recordedDate = pacificDateFromTimestamp(input.recordedAt);
+    const recordedDate = pacificDateFromTimestamp(receivedAt);
     const previousApproval = approvalPackageFor(previous);
-    const preserveWorkflowState = index >= 0 && shouldPreserveWorkflowStateForPreparation(previous, previousApproval);
+    const replacesPackageId = String(input.replacesPackageId || "").trim();
+    const replacementReason = String(input.replacementReason || "").trim();
+    const replaceBlockedPackage = Boolean(replacesPackageId)
+      && index >= 0
+      && String(previous.status || "") === "Preparing"
+      && String(previous.workbookStatus || "") === "Blocked"
+      && String(previousApproval?.status || "") === "Blocked"
+      && replacesPackageId === String(previousApproval?.id || "")
+      && approval.id !== replacesPackageId
+      && approval.tier !== "C"
+      && approval.exceptionReasons.length === 0
+      && Boolean(replacementReason)
+      && String(approval.officialJobId || "") === String(previousApproval?.officialJobId || "")
+      && approval.officialJobUrl === String(previousApproval?.officialJobUrl || "")
+      && String(approval.stableIdempotencyKey || "") === String(previousApproval?.stableIdempotencyKey || "")
+      && !previous.appliedDate;
+    const blockedPackageRequiresReplacement = index >= 0
+      && String(previous.status || "") === "Preparing"
+      && String(previous.workbookStatus || "") === "Blocked"
+      && String(previousApproval?.status || "") === "Blocked"
+      && approval.id !== String(previousApproval?.id || "");
+    if ((blockedPackageRequiresReplacement || replacesPackageId) && !replaceBlockedPackage) {
+      throw new Error("A blocked package replacement must name the current exact blocked package and preserve the official job and stable idempotency key.");
+    }
+    const preserveWorkflowState = index >= 0 && !replaceBlockedPackage && shouldPreserveWorkflowStateForPreparation(previous, previousApproval);
+    if (preserveWorkflowState) {
+      throw new Error("A progressed application cannot accept a new PREPARED action; an exact idempotent replay must reuse the original action ID.");
+    }
     const preparedToday = applications.filter((item) => {
       const itemApproval = approvalPackageFor(item);
       return itemApproval && safePacificDateFromTimestamp(itemApproval.preparedAt) === recordedDate && itemApproval.id !== approval.id;
@@ -328,29 +552,28 @@ function applyApplicationAction(state: JobHubState, input: ApplicationActionInpu
     const incomingScreeningPrep = incoming.screeningPrep && typeof incoming.screeningPrep === "object"
       ? incoming.screeningPrep as Record<string, unknown>
       : {};
-    const preservedApprovalStatus = previousApproval?.status
-      || (String(previous.workbookStatus) === "Blocked" ? "Blocked" : "")
-      || (["Applied", "Interviewing", "Offer"].includes(String(previous.status)) ? "Submitted" : "")
-      || (routineAuthorized ? "Validated" : "Pending");
+    const { id: _ignoredIncomingId, approval: _ignoredIncomingApproval, appliedDate: _ignoredIncomingAppliedDate, backendActionIds: _ignoredIncomingActionIds, sheetSynced: _ignoredIncomingSheetSynced, ...safeIncoming } = incoming;
     const next = {
       ...previous,
-      ...incoming,
-      id: String(incoming.id || previous.id || `backend-${normalizedApplicationKey(company, role).replace(/[^a-z0-9]+/g, "-")}`),
+      ...safeIncoming,
+      id: String(previous.id || suppliedApplicationId || `backend-${normalizedApplicationKey(company, role).replace(/[^a-z0-9]+/g, "-")}`),
       company,
       role,
-      status: preserveWorkflowState ? previous.status : "Preparing",
-      workbookStatus: preserveWorkflowState ? previous.workbookStatus : routineAuthorized ? "Validated for direct submission" : "Exception review required",
+      status: "Preparing",
+      workbookStatus: routineAuthorized ? "Validated for direct submission" : "Exception review required",
       link: String(previous.link || approval.officialJobUrl || input.directUrl || incoming.link || ""),
-      nextAction: preserveWorkflowState ? previous.nextAction : routineAuthorized ? "Submit after final live recheck" : "Resolve the exception in Job Hub",
-      notes: preserveWorkflowState ? appendEvidenceNote(previous.notes, String(incoming.notes || "")) : incoming.notes || previous.notes || "",
+      nextAction: routineAuthorized ? "Submit after final live recheck" : "Resolve the exception in Job Hub",
+      notes: replaceBlockedPackage
+        ? appendEvidenceNote(previous.notes, String(incoming.notes || replacementReason))
+        : incoming.notes || previous.notes || "",
       screeningPrep: { ...incomingScreeningPrep, ...previousScreeningPrep },
       approval: {
-        ...approval,
         ...previousApproval,
-        status: preserveWorkflowState ? preservedApprovalStatus : routineAuthorized ? "Validated" : "Pending",
-        preparedAt: previousApproval?.preparedAt || input.recordedAt,
-        approvedAt: previousApproval?.approvedAt || "",
-        reviewedAt: previousApproval?.reviewedAt || "",
+        ...approval,
+        status: routineAuthorized ? "Validated" : "Pending",
+        preparedAt: receivedAt,
+        approvedAt: "",
+        reviewedAt: "",
       },
       backendActionIds: [...ids],
       sheetSynced: true,
@@ -366,9 +589,11 @@ function applyApplicationAction(state: JobHubState, input: ApplicationActionInpu
   const index = applicationIndexFor(applications, input);
   if (index < 0) throw new Error("No matching backend application was found; UPSERT it first.");
   const current = applications[index];
+  requireMatchingApplicationIdentity(current, input.company, input.role);
   const ids = new Set(Array.isArray(current.backendActionIds) ? current.backendActionIds.filter((id): id is string => typeof id === "string") : []);
   if (ids.has(actionId)) return state;
   ids.add(actionId);
+  requireMonotonicApprovalAction(input.recordedAt, approvalPackageFor(current), action);
 
   if (action === "APPROVED" || action === "APPROVAL_REJECTED") {
     const approval = approvalPackageFor(current);
@@ -401,20 +626,25 @@ function applyApplicationAction(state: JobHubState, input: ApplicationActionInpu
     }
   } else if (action === "SUBMITTED") {
     const approval = approvalPackageFor(current);
+    const v5Required = requiresV5Mutation(receivedAt);
+    if (v5Required) {
+      if (!approval || approval.tier === "C") throw new Error("SUBMITTED received after the V5 cutover requires an exact V5 artifact package.");
+      await validateV5ApprovalForMutation(approval, "SUBMITTED", receivedAt, String(current.company || "").trim(), String(current.role || "").trim(), String(approval.preparedAt || input.recordedAt || ""));
+    }
     const packageId = String(input.packageId || "").trim();
     const exactAuthorizedPackage = approval
       && ["Validated", "Approved"].includes(String(approval.status))
       && packageId
       && approval.id === packageId;
-    if (!current.appliedDate && !exactAuthorizedPackage) {
+    if ((!current.appliedDate || v5Required) && !exactAuthorizedPackage) {
       throw new Error("SUBMITTED requires the current exact package to be routine-validated or exception-approved first.");
     }
-    if (!current.appliedDate && exactAuthorizedPackage) {
+    if ((!current.appliedDate || v5Required) && exactAuthorizedPackage) {
       const artifactHash = String(input.artifactPdfSha256 || "").trim();
       const uploadedHash = String(input.uploadedPdfSha256 || "").trim();
       const artifactPath = String(input.immutableArtifactPath || "").trim();
       const stableKey = String(input.stableIdempotencyKey || "").trim();
-      if (!input.confirmation) throw new Error("SUBMITTED requires authoritative confirmation text.");
+      if (typeof input.confirmation !== "string" || !input.confirmation.trim()) throw new Error("SUBMITTED requires authoritative confirmation text.");
       if (!artifactPath || artifactPath !== approval.immutableArtifactPath) throw new Error("SUBMITTED immutable artifact path does not match the validated package.");
       if (artifactHash !== approval.resumeSha256 || uploadedHash !== artifactHash || uploadedHash !== approval.uploadedPdfSha256) {
         throw new Error("SUBMITTED uploaded PDF hash must match the exact immutable validated package.");
@@ -461,6 +691,7 @@ function applyApplicationAction(state: JobHubState, input: ApplicationActionInpu
     const confirmedStatus = typeof input.confirmedStatus === "string" && validApplicationStatuses.has(input.confirmedStatus)
       ? input.confirmedStatus
       : current.status;
+    requireEstablishedSubmissionForStatus(current, confirmedStatus, "MAILBOX_CHECKED");
     applications[index] = {
       ...current,
       status: confirmedStatus,
@@ -479,6 +710,7 @@ function applyApplicationAction(state: JobHubState, input: ApplicationActionInpu
     };
   } else if (action === "STATUS_CHANGED") {
     if (!input.confirmedStatus || !validApplicationStatuses.has(input.confirmedStatus)) throw new Error("confirmedStatus is invalid.");
+    requireEstablishedSubmissionForStatus(current, input.confirmedStatus, "STATUS_CHANGED");
     applications[index] = {
       ...current,
       status: input.confirmedStatus,
@@ -771,20 +1003,26 @@ const worker = {
 
       if (request.method === "PUT") {
         const payload = await request.json() as Record<string, unknown>;
-        if (!Array.isArray(payload.applications) || !payload.progress || !payload.settings) {
+        if (!Array.isArray(payload.applications) || !isPlainRecord(payload.progress) || !isPlainRecord(payload.settings)
+            || !isStrictDate(payload.settings.startDate)
+            || typeof payload.settings.primaryLanguage !== "string" || !payload.settings.primaryLanguage.trim()
+            || !Number.isInteger(payload.settings.weeklyGoal) || Number(payload.settings.weeklyGoal) < 1 || Number(payload.settings.weeklyGoal) > 100) {
           return new Response(JSON.stringify({ error: "Invalid Job Hub state." }), { status: 400, headers });
         }
         const current = await readJobHubState(env.DB);
         if (typeof payload.baseUpdatedAt !== "string" || payload.baseUpdatedAt !== current.updatedAt) {
           return new Response(JSON.stringify({ error: "Backend state changed; reload before saving.", ...current.state, updatedAt: current.updatedAt }), { status: 409, headers });
         }
+        if (canonicalJson(payload.applications) !== canonicalJson(current.state.applications)) {
+          return new Response(JSON.stringify({ error: "Application changes must use /api/application-actions so exact-package and submission gates are enforced." }), { status: 400, headers });
+        }
         const state = {
           version: 3,
-          applications: payload.applications,
+          applications: current.state.applications,
           progress: payload.progress,
           settings: payload.settings,
         };
-        const now = new Date().toISOString();
+        const now = nextRevisionTimestamp(current.updatedAt);
         const result = await env.DB.prepare("UPDATE job_hub_state SET payload = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
           .bind(JSON.stringify(state), now, "primary", current.updatedAt)
           .run();
@@ -806,39 +1044,79 @@ const worker = {
       await ensureJobHubTables(env.DB);
       try {
         const input = await request.json() as ApplicationActionInput;
+        if (input.action && input.operation && input.action !== input.operation) {
+          return new Response(JSON.stringify({ error: "action and operation conflict." }), { status: 400, headers });
+        }
+        if (input.approvalId && input.idempotencyKey && input.approvalId !== input.idempotencyKey) {
+          return new Response(JSON.stringify({ error: "approvalId and idempotencyKey conflict." }), { status: 400, headers });
+        }
         const action = input.action || input.operation;
         const actionId = (input.approvalId || input.idempotencyKey || "").trim();
         if (!actionId || !action || !input.recordedAt) {
           return new Response(JSON.stringify({ error: "A stable approvalId/idempotencyKey, action, and recordedAt are required." }), { status: 400, headers });
         }
         pacificDateFromTimestamp(input.recordedAt);
-        const existing = await env.DB.prepare("SELECT id FROM job_hub_application_actions WHERE id = ?")
+        const existing = await env.DB.prepare("SELECT id, operation, payload FROM job_hub_application_actions WHERE id = ?")
           .bind(actionId)
-          .first<{ id: string }>();
-        if (existing) return new Response(JSON.stringify({ ok: true, duplicate: true, actionId }), { headers });
+          .first<{ id: string; operation: string; payload: string }>();
+        if (existing) {
+          let priorPayload: unknown;
+          try {
+            priorPayload = JSON.parse(existing.payload);
+          } catch {
+            return new Response(JSON.stringify({ error: "Stored idempotency record is malformed; refusing to treat this action as a duplicate." }), { status: 409, headers });
+          }
+          if (existing.operation !== action || canonicalJson(priorPayload) !== canonicalJson(input)) {
+            return new Response(JSON.stringify({ error: "This action ID is already bound to a different operation or payload." }), { status: 409, headers });
+          }
+          return new Response(JSON.stringify({ ok: true, duplicate: true, actionId }), { headers });
+        }
 
+        const receivedAt = new Date().toISOString();
+        requireActionNotFutureDated(input.recordedAt, receivedAt);
         const current = await readJobHubState(env.DB);
-        const nextState = applyApplicationAction(current.state, input, actionId);
-        const now = new Date().toISOString();
-        const update = await env.DB.prepare("UPDATE job_hub_state SET payload = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
-          .bind(JSON.stringify(nextState), now, "primary", current.updatedAt)
-          .run();
-        if ((update.meta.changes || 0) !== 1) {
+        const nextState = await applyApplicationAction(current.state, input, actionId, receivedAt);
+        const now = nextRevisionTimestamp(current.updatedAt, receivedAt);
+        let mutationResults;
+        try {
+          mutationResults = await env.DB.batch([
+            env.DB.prepare(`INSERT INTO job_hub_application_actions
+              (id, operation, company, role, payload, recorded_at, applied_at)
+              SELECT ?, ?, ?, ?, ?, ?, ?
+              WHERE EXISTS (SELECT 1 FROM job_hub_state WHERE id = ? AND updated_at = ?)`)
+              .bind(
+                actionId,
+                action,
+                String(input.company || input.application?.company || ""),
+                String(input.role || input.application?.role || ""),
+                JSON.stringify(input),
+                input.recordedAt,
+                receivedAt,
+                "primary",
+                current.updatedAt,
+              ),
+            env.DB.prepare("UPDATE job_hub_state SET payload = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
+              .bind(JSON.stringify(nextState), now, "primary", current.updatedAt),
+          ]);
+        } catch (batchError) {
+          const collision = await env.DB.prepare("SELECT id, operation, payload FROM job_hub_application_actions WHERE id = ?")
+            .bind(actionId)
+            .first<{ id: string; operation: string; payload: string }>();
+          if (collision) {
+            let priorPayload: unknown;
+            try { priorPayload = JSON.parse(collision.payload); } catch { priorPayload = null; }
+            if (priorPayload !== null && collision.operation === action && canonicalJson(priorPayload) === canonicalJson(input)) {
+              return new Response(JSON.stringify({ ok: true, duplicate: true, actionId }), { headers });
+            }
+            return new Response(JSON.stringify({ error: "This action ID is already bound to a different operation or payload." }), { status: 409, headers });
+          }
+          throw batchError;
+        }
+        if (mutationResults.length !== 2
+            || (mutationResults[0].meta.changes || 0) !== 1
+            || (mutationResults[1].meta.changes || 0) !== 1) {
           return new Response(JSON.stringify({ error: "Backend state changed; retry this same idempotent action." }), { status: 409, headers });
         }
-        await env.DB.prepare(`INSERT OR IGNORE INTO job_hub_application_actions
-          (id, operation, company, role, payload, recorded_at, applied_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`)
-          .bind(
-            actionId,
-            action,
-            String(input.company || input.application?.company || ""),
-            String(input.role || input.application?.role || ""),
-            JSON.stringify(input),
-            input.recordedAt,
-            now,
-          )
-          .run();
         return new Response(JSON.stringify({ ok: true, duplicate: false, actionId, updatedAt: now }), { headers });
       } catch (error) {
         return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "The backend action could not be applied." }), { status: 400, headers });

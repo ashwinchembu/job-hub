@@ -1,6 +1,6 @@
 # Candidate-Neutral Resume Builder
 
-The builder consumes a private, job-specific JSON specification and produces an ATS-oriented PDF. No real candidate data or submitted resume is included in this repository.
+The builder consumes a private, job-specific JSON specification and produces an ATS-oriented PDF. No real candidate data or submitted resume is included in this repository. The current command-line path accepts exactly tailoring version 5: it inherits the v3 body-selection and v4 evidence-audit gates, uses one configured point size for every Experience and Projects bullet, applies bold as weight only, allows natural one- or two-line wrapping, and rejects applicant-facing audit narration or provenance labels. Historical v3/v4 specifications remain validation-compatible for audit but cannot be rebuilt by the CLI.
 
 ## Setup
 

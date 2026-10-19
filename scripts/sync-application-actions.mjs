@@ -23,6 +23,14 @@ function parseJsonLines(text) {
     });
 }
 
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function pacificDate(timestamp) {
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime()) || !/(?:Z|[+-]\d{2}:\d{2})$/.test(timestamp || "")) {
@@ -36,56 +44,6 @@ function pacificDate(timestamp) {
   }).formatToParts(date);
   const value = (type) => parts.find((part) => part.type === type)?.value || "";
   return `${value("year")}-${value("month")}-${value("day")}`;
-}
-
-function stableId(company, role) {
-  return `backend-${company}-${role}`
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 120);
-}
-
-function publishedSalaryRange(value) {
-  const amounts = String(value || "")
-    .match(/\$?\d[\d,]*/g)
-    ?.map((amount) => Number(amount.replace(/[$,]/g, "")))
-    .filter((amount) => Number.isFinite(amount) && amount >= 10_000) || [];
-  return {
-    salaryMin: amounts[0] ? String(amounts[0]) : "",
-    salaryMax: amounts[1] ? String(amounts[1]) : amounts[0] ? String(amounts[0]) : "",
-  };
-}
-
-function baseApplication(action, request) {
-  const submitted = action.action === "SUBMITTED";
-  const applicationDate = submitted ? pacificDate(action.recordedAt) : "";
-  const salary = publishedSalaryRange(request?.publishedBaseRange);
-  return {
-    id: stableId(action.company, action.role),
-    company: action.company,
-    role: action.role,
-    location: request?.sfLocation || request?.workModel || "",
-    status: submitted ? "Applied" : "Preparing",
-    workbookStatus: submitted ? "Submitted" : "Blocked",
-    appliedDate: applicationDate,
-    followUpDate: "",
-    salaryMin: salary.salaryMin,
-    salaryMax: salary.salaryMax,
-    source: action.directUrl ? `Official application · ${new URL(action.directUrl).hostname}` : "Authoritative job-finder action",
-    link: action.directUrl || "",
-    priority: "High",
-    notes: action.confirmation || action.reason || action.note || "Authoritative job-finder action recorded.",
-    nextAction: submitted ? "Daily morning Gmail status check" : "Verify the uncertain submission outcome before retrying",
-    currentRound: submitted ? "Application submitted" : "Submission outcome uncertain",
-    completedRounds: 0,
-    latestEmail: action.receipt?.receivedAt || action.receipt?.sentAt || "",
-    latestEmailSubject: action.receipt?.subject || "",
-    resumePath: request?.tailoredResumePath || "",
-    sheetSynced: true,
-  };
 }
 
 async function postAction(baseUrl, token, payload, { allowMissing = false } = {}) {
@@ -109,8 +67,29 @@ async function postAction(baseUrl, token, payload, { allowMissing = false } = {}
   }
 }
 
+async function verifyBackendReadback(baseUrl, token, action) {
+  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/state`, {
+    headers: { "OAI-Sites-Authorization": `Bearer ${token}` },
+    cache: "no-store",
+  });
+  const state = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(`${action.approvalId}: backend readback failed: ${state.error || `HTTP ${response.status}`}`);
+  const company = String(action.company || action.application?.company || "").trim();
+  const role = String(action.role || action.application?.role || "").trim();
+  const applicationId = String(action.applicationId || action.application?.id || "").trim();
+  const matches = Array.isArray(state.applications)
+    ? state.applications.filter((application) => {
+        if (applicationId) return application?.id === applicationId && application?.company === company && application?.role === role;
+        return application?.company === company && application?.role === role;
+      })
+    : [];
+  if (matches.length !== 1 || !Array.isArray(matches[0].backendActionIds) || !matches[0].backendActionIds.includes(action.approvalId)) {
+    throw new Error(`${action.approvalId}: backend readback did not prove the exact action on the exact application identity.`);
+  }
+  return String(state.updatedAt || "");
+}
+
 const actionFile = path.resolve(argument("--actions", "../tmp/approval_bridge/application_actions.jsonl"));
-const requestFile = path.resolve(argument("--requests", "../tmp/approval_bridge/approval_requests.jsonl"));
 const baseUrl = argument("--base-url", process.env.JOB_HUB_BASE_URL || "");
 const approvalIds = new Set(argument("--approval-ids").split(",").map((value) => value.trim()).filter(Boolean));
 const dryRun = process.argv.includes("--dry-run");
@@ -119,7 +98,8 @@ const token = process.env.JOB_HUB_SIWC_BYPASS_TOKEN || "";
 
 if (!baseUrl) throw new Error("JOB_HUB_BASE_URL or --base-url is required.");
 
-const actions = parseJsonLines(await readFile(actionFile, "utf8"))
+const allowedActions = new Set(["APPROVED", "APPROVAL_REJECTED", "SUBMITTED", "BLOCKED", "MAILBOX_CHECKED", "STATUS_CHANGED", "UPSERT"]);
+const normalizedActions = parseJsonLines(await readFile(actionFile, "utf8"))
   .map((item) => ({
     ...item,
     approvalId: item.approvalId || item.actionId || item.idempotencyKey,
@@ -128,17 +108,30 @@ const actions = parseJsonLines(await readFile(actionFile, "utf8"))
     immutableArtifactPath: item.immutableArtifactPath,
     stableIdempotencyKey: item.stableIdempotencyKey || item.idempotencyKey,
     artifactPdfSha256: item.artifactPdfSha256 || item.resumePdfSha256,
-  }))
-  .filter((item) => ["APPROVED", "APPROVAL_REJECTED", "SUBMITTED", "BLOCKED", "MAILBOX_CHECKED", "STATUS_CHANGED", "UPSERT"].includes(item.action) && item.approvalId && item.recordedAt && (item.action === "UPSERT" || (item.company && item.role)))
-  .filter((item) => approvalIds.size === 0 || approvalIds.has(item.approvalId));
-let requests = [];
-try {
-  requests = parseJsonLines(await readFile(requestFile, "utf8"));
-} catch (error) {
-  if (error && typeof error === "object" && "code" in error && error.code !== "ENOENT") throw error;
+  }));
+const actions = normalizedActions.filter((item) => approvalIds.size === 0 || approvalIds.has(item.approvalId));
+for (const item of approvalIds.size === 0 ? normalizedActions : actions) {
+  const company = String(item.company || item.application?.company || "").trim();
+  const role = String(item.role || item.application?.role || "").trim();
+  if (!allowedActions.has(item.action) || typeof item.approvalId !== "string" || !item.approvalId.trim()
+      || typeof item.recordedAt !== "string" || !/(?:Z|[+-]\d{2}:\d{2})$/.test(item.recordedAt) || Number.isNaN(Date.parse(item.recordedAt))
+      || !company || !role
+      || (item.action === "SUBMITTED" && (typeof item.confirmation !== "string" || !item.confirmation.trim()))) {
+    throw new Error("Application action ledger contains a malformed or unsupported row; sync aborted without discarding it.");
+  }
 }
-const requestById = new Map(requests.map((item) => [item.approvalId, item]));
-const latestById = new Map(actions.map((item) => [item.approvalId, item]));
+const latestById = new Map();
+for (const item of actions) {
+  const prior = latestById.get(item.approvalId);
+  if (prior && canonicalJson(prior) !== canonicalJson(item)) {
+    throw new Error(`${item.approvalId}: duplicate action ID is bound to conflicting payloads.`);
+  }
+  latestById.set(item.approvalId, item);
+}
+if (approvalIds.size > 0) {
+  const missing = [...approvalIds].filter((approvalId) => !latestById.has(approvalId));
+  if (missing.length) throw new Error(`Requested application actions were not found: ${missing.join(", ")}`);
+}
 
 if (dryRun) {
   const summary = [...latestById.values()].reduce((counts, item) => {
@@ -155,18 +148,11 @@ if (approvalIds.size === 0 && !allowAll) throw new Error("A production sync requ
 const results = [];
 for (const action of latestById.values()) {
   let applied = await postAction(baseUrl, token, action, { allowMissing: true });
-  let upsert = null;
   if (applied.missing) {
-    const application = baseApplication(action, requestById.get(action.approvalId));
-    upsert = await postAction(baseUrl, token, {
-      action: "UPSERT",
-      idempotencyKey: `${action.approvalId}:upsert:v1`,
-      recordedAt: action.recordedAt,
-      application,
-    });
-    applied = await postAction(baseUrl, token, action);
+    throw new Error(`${action.approvalId}: ${action.action} must match an existing exact backend application; automatic UPSERT is intentionally disabled.`);
   }
-  results.push({ approvalId: action.approvalId, company: action.company, role: action.role, action: action.action, upserted: Boolean(upsert), upsertDuplicate: Boolean(upsert?.duplicate), actionDuplicate: Boolean(applied.duplicate) });
+  const readbackUpdatedAt = await verifyBackendReadback(baseUrl, token, action);
+  results.push({ approvalId: action.approvalId, company: action.company, role: action.role, action: action.action, actionDuplicate: Boolean(applied.duplicate), readbackVerified: true, readbackUpdatedAt });
 }
 
 process.stdout.write(`${JSON.stringify({ ok: true, synced: results.length, results }, null, 2)}\n`);

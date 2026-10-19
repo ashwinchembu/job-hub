@@ -1340,6 +1340,41 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
+.possible-spam-banner {
+  margin: -10px 0 20px;
+  padding: 13px 15px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid #efaa95;
+  border-radius: 13px;
+  background: #fff0ea;
+  color: #982f20;
+}
+
+.possible-spam-banner > span {
+  display: grid;
+  gap: 3px;
+  font-size: 12px;
+}
+
+.possible-spam-banner small {
+  color: #6f514b;
+  font-size: 10px;
+}
+
+.possible-spam-banner button {
+  padding: 8px 11px;
+  border: 1px solid #d87864;
+  border-radius: 9px;
+  background: #fff8f4;
+  color: #8f291c;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -1463,6 +1498,38 @@ textarea:focus-visible {
   min-height: 88px;
   padding: 13px 18px;
   border-top: 1px solid var(--line);
+}
+
+.application-row.application-row-spam-rejected {
+  border-left: 4px solid #cb432f;
+  background: #fff3ef;
+}
+
+.application-row.application-row-spam-path-paused {
+  border-left: 4px solid #d89a22;
+  background: #fffaf0;
+}
+
+.spam-block-badge {
+  width: max-content;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.spam-block-badge.spam-block-rejected {
+  border: 1px solid #e7a091;
+  background: #ffe4dc;
+  color: #9e2d1f;
+}
+
+.spam-block-badge.spam-block-path-paused {
+  border: 1px solid #e6c676;
+  background: #fff2c8;
+  color: #755210;
 }
 
 .application-row:first-of-type {

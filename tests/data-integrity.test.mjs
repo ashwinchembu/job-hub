@@ -6,6 +6,7 @@ const dataSource = await readFile(new URL("../app/data.ts", import.meta.url), "u
 const hubSource = await readFile(new URL("../app/JobHub.tsx", import.meta.url), "utf8");
 const agentSetupSource = await readFile(new URL("../app/agent-setup.ts", import.meta.url), "utf8");
 const codexSetupGuide = await readFile(new URL("../docs/CODEX_SETUP.md", import.meta.url), "utf8");
+const agentIntegrationGuide = await readFile(new URL("../docs/AGENT_INTEGRATION.md", import.meta.url), "utf8");
 const codeReviewSource = await readFile(new URL("../build/local-code-review.ts", import.meta.url), "utf8");
 const aiHintSource = await readFile(new URL("../build/ai-hint.ts", import.meta.url), "utf8");
 const careerFollowUpSource = await readFile(new URL("../build/career-lab-followups.ts", import.meta.url), "utf8");
@@ -86,14 +87,14 @@ test("agent onboarding keeps credentials ephemeral and generates an exact Codex 
 test("the job finder writes application actions directly to the backend", () => {
   assert.match(workerSource, /url\.pathname === "\/api\/application-actions"/);
   assert.match(workerSource, /job_hub_application_actions/);
-  assert.match(workerSource, /INSERT OR IGNORE INTO job_hub_application_actions/);
+  assert.match(workerSource, /env\.DB\.batch\(\[\s*env\.DB\.prepare\(`INSERT INTO job_hub_application_actions[\s\S]*WHERE EXISTS \(SELECT 1 FROM job_hub_state WHERE id = \? AND updated_at = \?\)/);
   assert.match(workerSource, /America\/Los_Angeles/);
   assert.match(workerSource, /action === "BLOCKED"/);
   assert.match(workerSource, /input\.retryInstruction \|\| "Verify the uncertain submission outcome before retrying"/);
   assert.match(backendSyncSource, /OAI-Sites-Authorization/);
   assert.match(backendSyncSource, /JOB_HUB_SIWC_BYPASS_TOKEN/);
-  assert.match(backendSyncSource, /:upsert:v1/);
-  assert.match(backendSyncSource, /publishedSalaryRange\(request\?\.publishedBaseRange\)/);
+  assert.match(backendSyncSource, /automatic UPSERT is intentionally disabled/);
+  assert.match(backendSyncSource, /backend readback did not prove the exact action on the exact application identity/);
   assert.match(backendSyncSource, /approvalId: item\.approvalId \|\| item\.actionId/);
   assert.match(backendSyncSource, /artifactPdfSha256: item\.artifactPdfSha256 \|\| item\.resumePdfSha256/);
   assert.doesNotMatch(viteSource, /localJobTracker/);
@@ -111,8 +112,10 @@ test("routine applications use exact-package validation and exception-only revie
   assert.match(workerSource, /Tier A and B packages require the exact resume SHA-256/);
   assert.match(workerSource, /shouldPreserveWorkflowStateForPreparation/);
   assert.match(workerSource, /\["Pending", "Blocked"\]\.includes\(String\(approval\.status\)\)/);
-  assert.match(workerSource, /preserveWorkflowState \? previous\.status : "Preparing"/);
-  assert.doesNotMatch(workerSource, /A completed or advanced application cannot be replaced by a preparation package/);
+  assert.match(workerSource, /A progressed application cannot accept a new PREPARED action/);
+  assert.match(workerSource, /status: "Preparing"/);
+  assert.match(hubSource, /upsertApplicationThroughBackend/);
+  assert.match(hubSource, /application removal requires a dedicated audited action/);
   assert.match(hubSource, /Routine applications run\. Judgment calls stop here\./);
   assert.match(hubSource, /Exceptions/);
   assert.match(hubSource, /qualification, factual, ATS, rendering, duplicate, answer, immutable-artifact, and live-posting check/);
@@ -121,6 +124,25 @@ test("routine applications use exact-package validation and exception-only revie
   assert.match(preparationSyncSource, /resumeSha256/);
   assert.match(preparationSyncSource, /immutableArtifactPath/);
   assert.match(preparationSyncSource, /exceptionReasons/);
+  assert.match(preparationSyncSource, /CURRENT_TAILORING_VERSION = 5/);
+  assert.match(preparationSyncSource, /inspectV5Artifact/);
+  assert.match(preparationSyncSource, /verifyArtifactFile/);
+  assert.match(preparationSyncSource, /artifactManifestSha256/);
+  assert.match(preparationSyncSource, /validateV5ResumeSpec/);
+  assert.match(preparationSyncSource, /applicationAnswersSha256/);
+  assert.match(preparationSyncSource, /artifactProofBindingSha256/);
+  assert.match(workerSource, /stableIdempotencyKey is not bound to the exact company, role, and officialJobId/);
+  assert.match(workerSource, /V5 artifact proof binding does not match the exact package identity and inspected hashes/);
+  assert.match(workerSource, /PREPARED packageId must match approvalPackage\.id exactly/);
+  assert.match(workerSource, /SELECT id, operation, payload FROM job_hub_application_actions/);
+  assert.match(workerSource, /action ID is already bound to a different operation or payload/);
+  assert.match(agentIntegrationGuide, /authenticated preparation sync client is the trust root/);
+  assert.match(agentIntegrationGuide, /not a signature/);
+  assert.match(preparationSyncSource, /candidatePackageId[\s\S]*continue;[\s\S]*await validatePackage/);
+  assert.doesNotMatch(preparationSyncSource, /new Date\(event\.recordedAt\)\.getTime\(\) >= V5_CUTOVER_AT/);
+  assert.match(workerSource, /validateV5ApprovalForMutation/);
+  assert.match(workerSource, /SUBMITTED received after the V5 cutover requires an exact V5 artifact package/);
+  assert.match(workerSource, /applyApplicationAction\(current\.state, input, actionId, receivedAt\)/);
 });
 
 test("multi-source discovery is persisted, deduplicated, and visible in Job Hub", () => {
@@ -160,6 +182,10 @@ test("applications expose sortable columns and a full role workspace", () => {
   assert.match(hubSource, /interviewConfirmed \? "Career Lab" : "Career Lab · locked"/);
   assert.match(hubSource, /interviewConfirmed \? `Interviews \$\{stages\.length\}` : "Interviews · locked"/);
   assert.match(hubSource, /Confirmed \/ signal-backed/);
+  assert.match(hubSource, /function possibleSpamBlock/);
+  assert.match(hubSource, /Possible spam rejection/);
+  assert.match(hubSource, /Ashby path paused/);
+  assert.match(hubSource, /Show affected roles/);
   assert.doesNotMatch(hubSource, /Update this record in Excel/);
 });
 
